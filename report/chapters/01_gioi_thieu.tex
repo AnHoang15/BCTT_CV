@@ -1,0 +1,143 @@
+% ─────────────────────────────────────────────────────────────────────────────
+%  Chương 1 — Giới thiệu
+%  Hướng dẫn của Khoa: 1--2 trang. Nêu công việc được giao, phát biểu bài toán,
+%  khảo sát công nghệ kèm ưu nhược điểm, và lý do chọn công nghệ đã dùng.
+% ─────────────────────────────────────────────────────────────────────────────
+\chapter{Giới thiệu}
+\label{ch:gioithieu}
+
+\section{Công việc được giao}
+\label{sec:congviec}
+
+\todo{Chỉnh lại đoạn này theo đúng bối cảnh công ty bạn thực tập. Phần dưới viết
+sẵn theo giả định phổ biến, giữ nguyên được thì giữ.}
+
+Đơn vị thực tập giao cho tôi xây dựng một hệ thống giám sát camera có khả năng
+tự động đếm lượng người ra vào một khu vực, thay cho cách đếm thủ công hoặc dùng
+cảm biến hồng ngoại đặt tại cửa. Yêu cầu đặt ra gồm ba phần: xem được hình ảnh
+trực tiếp từ nhiều camera cùng lúc, tự động nhận diện và đếm người qua một ranh
+giới do người dùng tự vẽ, và tra cứu lại được các sự kiện đã xảy ra.
+
+Cảm biến hồng ngoại tại cửa rẻ và dễ lắp, song đếm sai khi hai người đi sát nhau
+và không phân biệt được chiều vào với chiều ra. Camera thì hầu hết cơ sở đã lắp
+sẵn. Bài toán vì thế chuyển thành khai thác dữ liệu hình ảnh có sẵn thay vì đầu
+tư thêm phần cứng.
+
+\section{Phát biểu bài toán}
+\label{sec:baitoan}
+
+Cho một luồng video từ camera, hệ thống cần:
+
+\begin{enumerate}[leftmargin=*, itemsep=2pt]
+  \item Phát hiện vị trí của người trong từng khung hình.
+  \item Gán cho mỗi người một mã định danh và duy trì mã đó khi người di chuyển
+        giữa các khung hình liên tiếp.
+  \item Đếm số lượt vượt qua một đoạn thẳng do người dùng vẽ, tách riêng hai
+        chiều Vào và Ra.
+  \item Lưu lại ảnh chụp và thời điểm của từng lượt để tra cứu về sau.
+\end{enumerate}
+
+Ràng buộc thực tế: hệ thống chạy trên một máy tính thông thường, không có máy
+chủ GPU chuyên dụng; xử lý phải theo kịp luồng video thời gian thực; và người
+dùng cuối là nhân viên vận hành, không phải kỹ sư, nên mọi cấu hình phải làm được
+qua giao diện đồ họa.
+
+\section{Khảo sát công nghệ}
+\label{sec:khaosat}
+
+\subsection{Mô hình phát hiện đối tượng}
+
+Ba hướng tiếp cận phổ biến cho bài toán phát hiện đối tượng được cân nhắc, tóm
+tắt trong Bảng~\ref{tab:sosanh-detector}.
+
+\begin{table}[H]
+\centering
+\caption{So sánh các họ mô hình phát hiện đối tượng cho bài toán đếm người theo
+thời gian thực.}
+\label{tab:sosanh-detector}
+\small
+\begin{tabularx}{\textwidth}{@{}lXX@{}}
+\toprule
+\textbf{Mô hình} & \textbf{Ưu điểm} & \textbf{Nhược điểm} \\
+\midrule
+Faster R-CNN & Độ chính xác cao, đặc biệt với vật thể nhỏ &
+Hai giai đoạn nên chậm, khó đạt thời gian thực trên CPU \\
+\addlinespace
+DETR và biến thể & Bỏ được bước NMS, kiến trúc gọn về mặt khái niệm &
+Cần nhiều dữ liệu và thời gian huấn luyện, hệ sinh thái triển khai còn mỏng \\
+\addlinespace
+YOLO (v8) & Một giai đoạn, tốc độ cao, trọng số huấn luyện sẵn trên COCO,
+thư viện Ultralytics hỗ trợ đầy đủ &
+Độ chính xác thấp hơn Faster R-CNN với vật thể rất nhỏ hoặc bị che khuất nhiều \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+YOLOv8 được chọn. Lý do quyết định là bộ trọng số huấn luyện sẵn trên COCO đã
+chứa lớp \code{person} cùng các lớp phương tiện, nên hệ thống chạy được ngay mà
+không cần gán nhãn và huấn luyện lại. Với một kỳ thực tập kéo dài vài tuần, việc
+xây dựng tập dữ liệu riêng sẽ chiếm gần hết quỹ thời gian và không còn chỗ cho
+phần ứng dụng.
+
+\subsection{Thuật toán bám vết}
+
+Phát hiện đơn thuần thì chưa đếm được. Muốn biết một người đã đi qua vạch hay
+chưa, cần theo dõi người đó qua nhiều khung hình liên tiếp.
+
+SORT chạy rất nhanh nhưng đổi mã định danh liên tục mỗi khi đối tượng bị che
+khuất. DeepSORT khắc phục bằng cách so khớp thêm đặc trưng ngoại hình, đổi lại
+phải chạy thêm một mạng trích đặc trưng cho từng hộp, chi phí tăng đáng kể.
+ByteTrack chọn hướng khác: tận dụng cả những hộp có điểm tin cậy thấp mà SORT
+loại bỏ, nhờ đó giữ được vết qua các đoạn che khuất ngắn mà không cần mạng phụ
+nào. Thư viện \en{Supervision} đã đóng gói sẵn ByteTrack cùng các tiện ích vẽ chú
+thích, nên chi phí tích hợp gần như bằng không.
+
+\subsection{Truyền hình ảnh về trình duyệt}
+
+WebRTC cho độ trễ thấp nhất nhưng đòi hỏi máy chủ báo hiệu, xử lý STUN/TURN và
+mã hóa lại luồng. HLS ổn định qua Internet, đổi lại độ trễ vài giây do phải chia
+đoạn. MJPEG thì chỉ là chuỗi ảnh JPEG nối tiếp trong một phản hồi HTTP, hiển thị
+được bằng thẻ \code{<img>} thông thường.
+
+Hệ thống chạy trong mạng nội bộ với số camera nhỏ, nên MJPEG là lựa chọn hợp lý:
+độ trễ dưới nửa giây, không cần thư viện phía trình duyệt, và quan trọng hơn cả
+là ảnh gửi đi đã được vẽ sẵn hộp giới hạn cùng vạch đếm ở phía máy chủ. Mọi máy
+trạm nhìn thấy đúng một kết quả. Cái giá phải trả là băng thông cao hơn, điều
+này chấp nhận được trong mạng LAN.
+
+\subsection{Cơ sở dữ liệu}
+
+PostgreSQL mạnh khi nhiều tiến trình cùng ghi và dữ liệu lớn, nhưng kéo theo một
+dịch vụ phải cài đặt và vận hành riêng. SQLite chạy ngay trong tiến trình ứng
+dụng, không cần cấu hình, và ở chế độ WAL cho phép nhiều luồng đọc song song với
+một luồng ghi. Khối lượng ghi của hệ thống chỉ vài sự kiện mỗi phút cho mỗi
+camera, thấp hơn nhiều so với ngưỡng SQLite bắt đầu đuối. Chọn SQLite giúp toàn
+bộ hệ thống triển khai bằng một lệnh duy nhất.
+
+\section{Công nghệ sử dụng}
+\label{sec:congnghe}
+
+\begin{table}[H]
+\centering
+\caption{Thành phần công nghệ của hệ thống và vai trò của từng thành phần.}
+\label{tab:congnghe}
+\small
+\begin{tabularx}{\textwidth}{@{}llX@{}}
+\toprule
+\textbf{Lớp} & \textbf{Công nghệ} & \textbf{Vai trò} \\
+\midrule
+Xử lý ảnh    & OpenCV            & Đọc luồng video, vẽ chú thích, mã hóa JPEG và ghi tệp MP4 \\
+Phát hiện    & YOLOv8 (Ultralytics) & Xác định vị trí người và phương tiện trong khung hình \\
+Bám vết      & ByteTrack (Supervision) & Gán và duy trì mã định danh cho từng đối tượng \\
+Máy chủ      & FastAPI, Uvicorn  & Cung cấp REST API và luồng MJPEG \\
+Lưu trữ      & SQLite (chế độ WAL) & Ghi sự kiện, số đếm, chỉ mục đoạn video \\
+Giao diện    & React, TypeScript, Vite & Ứng dụng một trang cho người vận hành \\
+Biểu đồ      & Recharts          & Vẽ biểu đồ lưu lượng theo giờ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Python được chọn cho phần xử lý vì toàn bộ hệ sinh thái thị giác máy tính đều
+xoay quanh ngôn ngữ này. TypeScript cho phần giao diện giúp bắt lỗi sai kiểu dữ
+liệu ngay khi biên dịch, thay vì đợi đến lúc chạy mới phát hiện API trả về thiếu
+trường.

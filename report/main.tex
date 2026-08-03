@@ -1,0 +1,151 @@
+% =============================================================================
+%  BÁO CÁO KẾT THÚC THỰC TẬP
+%  Hệ thống giám sát camera bằng thị giác máy tính (VisionOS)
+%
+%  Biên dịch:  xelatex main.tex  →  biber main  →  xelatex main.tex ×2
+%  hoặc gọn hơn:  latexmk -xelatex main.tex
+%
+%  BẮT BUỘC dùng XeLaTeX hoặc LuaLaTeX (không dùng pdfLaTeX) vì tài liệu nạp
+%  phông chữ hệ thống qua fontspec để hiển thị tiếng Việt có dấu.
+% =============================================================================
+\documentclass[a4paper,13pt]{extreport}
+% Nếu máy chưa có gói extsizes, đổi dòng trên thành:
+%   \documentclass[a4paper,12pt]{report}
+
+% ── Phông chữ và ngôn ngữ ────────────────────────────────────────────────────
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setdefaultlanguage{vietnamese}
+\setotherlanguage{english}
+
+% Times New Roman có sẵn trên macOS và Windows. Trên Linux, cài ttf-mscorefonts
+% hoặc đổi sang phông thay thế đã chú thích bên dưới.
+\setmainfont{Times New Roman}
+% \setmainfont{Liberation Serif}      % thay thế trên Linux
+\setmonofont{Menlo}[Scale=0.85]
+% \setmonofont{DejaVu Sans Mono}[Scale=0.85]   % thay thế trên Linux
+
+% ── Bố cục trang ─────────────────────────────────────────────────────────────
+\usepackage[
+  a4paper,
+  top=2cm, bottom=2cm, left=3cm, right=2cm,
+  footskip=1.2cm
+]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+\setlength{\parindent}{1cm}
+\setlength{\parskip}{0.3em}
+
+% ── Gói hỗ trợ ───────────────────────────────────────────────────────────────
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{caption}
+\usepackage{listings}
+\usepackage[hidelinks]{hyperref}
+
+% ── Trích dẫn ────────────────────────────────────────────────────────────────
+% Dùng biblatex + biber. Nếu muốn dùng BibTeX truyền thống, thay bằng
+% \usepackage[numbers]{natbib} và \bibliographystyle{unsrt}.
+\usepackage[backend=biber, style=numeric, sorting=none]{biblatex}
+\addbibresource{refs.bib}
+
+% ── Định dạng tiêu đề chương/mục ─────────────────────────────────────────────
+\titleformat{\chapter}[block]
+  {\normalfont\Large\bfseries}{Chương \thechapter.}{0.6em}{\Large}
+\titlespacing*{\chapter}{0pt}{0pt}{18pt}
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries}{\thesubsection}{0.6em}{}
+
+\captionsetup{font=small, labelfont=bf, textfont=it}
+
+% ── Đầu trang, chân trang ────────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\itshape Báo cáo kết thúc thực tập}
+\fancyhead[R]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancypagestyle{plain}{\fancyhf{}\fancyhead[R]{\small\thepage}
+  \renewcommand{\headrulewidth}{0.4pt}}
+
+% ── Định dạng mã nguồn ───────────────────────────────────────────────────────
+\definecolor{codebg}{RGB}{248,249,251}
+\definecolor{codekw}{RGB}{170,55,110}
+\definecolor{codecm}{RGB}{110,120,130}
+\definecolor{codestr}{RGB}{40,120,80}
+\lstdefinestyle{code}{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{codekw}\bfseries,
+  commentstyle=\color{codecm}\itshape,
+  stringstyle=\color{codestr},
+  numbers=left, numberstyle=\tiny\color{codecm}, numbersep=8pt,
+  breaklines=true, showstringspaces=false,
+  frame=single, rulecolor=\color{codecm!30},
+  xleftmargin=14pt, framexleftmargin=14pt,
+  captionpos=b,
+  % listings không đọc được UTF-8 mặc định; khai báo các ký tự tiếng Việt hay dùng
+  extendedchars=true, inputencoding=utf8,
+  literate=%
+    {á}{{\'a}}1 {à}{{\`a}}1 {ả}{{\h a}}1 {ã}{{\~a}}1 {ạ}{{\d a}}1
+    {ă}{{\u a}}1 {â}{{\^a}}1 {đ}{{\dj}}1 {é}{{\'e}}1 {ê}{{\^e}}1
+    {í}{{\'i}}1 {ó}{{\'o}}1 {ô}{{\^o}}1 {ơ}{{\o}}1 {ú}{{\'u}}1
+    {ư}{{\u u}}1 {ý}{{\'y}}1 {ệ}{{\d e}}1 {ế}{{\'{\^e}}}1 {ị}{{\d i}}1
+    {ộ}{{\d o}}1 {ố}{{\'{\^o}}}1 {ợ}{{\d o}}1 {ứ}{{\'u}}1 {ự}{{\d u}}1
+}
+\lstset{style=code}
+
+% ── Lệnh tắt dùng trong bài ──────────────────────────────────────────────────
+\newcommand{\en}[1]{\textit{#1}}                 % thuật ngữ tiếng Anh
+\newcommand{\todo}[1]{\textcolor{red}{[\textbf{CẦN ĐIỀN:} #1]}}
+\newcommand{\code}[1]{\texttt{\small #1}}
+
+% =============================================================================
+\begin{document}
+
+% ── Bìa ──────────────────────────────────────────────────────────────────────
+\input{chapters/00_bia}
+
+% ── Phần đầu: đánh số La Mã ──────────────────────────────────────────────────
+\pagenumbering{roman}
+\setcounter{page}{1}
+
+\input{chapters/00_loi_cam_on}
+
+\tableofcontents
+\listoffigures
+\listoftables
+
+\input{chapters/00_viet_tat}
+
+% ── Nội dung chính: đánh số Ả Rập ────────────────────────────────────────────
+\clearpage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+\input{chapters/01_gioi_thieu}
+\input{chapters/02_trien_khai}
+\input{chapters/03_ket_qua}
+
+% ── Tài liệu tham khảo ───────────────────────────────────────────────────────
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{Tài liệu tham khảo}
+\printbibliography[title={Tài liệu tham khảo}]
+
+% ── Phụ lục ──────────────────────────────────────────────────────────────────
+\appendix
+\input{chapters/04_phu_luc}
+
+% ── Nhận xét của đơn vị thực tập ─────────────────────────────────────────────
+\input{chapters/05_nhan_xet}
+
+\end{document}

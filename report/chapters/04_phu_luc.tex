@@ -1,0 +1,260 @@
+% ─────────────────────────────────────────────────────────────────────────────
+%  Phụ lục
+%  Hướng dẫn của Khoa: phân chia công việc nhóm (nếu làm nhóm), tài liệu tham
+%  khảo và trang web lấy mã nguồn, các ký hiệu viết tắt.
+%  Danh mục viết tắt đã đặt ở đầu quyển, tài liệu tham khảo in trước phụ lục.
+% ─────────────────────────────────────────────────────────────────────────────
+\chapter{Phân chia công việc}
+\label{app:phancong}
+
+\todo{Bỏ chương này nếu làm báo cáo cá nhân. Nếu làm nhóm thì bắt buộc phải có
+theo hướng dẫn của Khoa.}
+
+\begin{table}[H]
+\centering
+\caption{Phân chia công việc giữa các thành viên trong nhóm.}
+\label{tab:phancong}
+\small
+\begin{tabularx}{\textwidth}{@{}llXc@{}}
+\toprule
+\textbf{STT} & \textbf{Họ và tên} & \textbf{Công việc phụ trách} & \textbf{Tỉ lệ} \\
+\midrule
+1 & \todo{Tên} & \todo{ví dụ: engine xử lý ảnh, thuật toán đếm, kiểm thử} & \todo{\%} \\
+2 & \todo{Tên} & \todo{ví dụ: REST API, cơ sở dữ liệu, ghi hình} & \todo{\%} \\
+3 & \todo{Tên} & \todo{ví dụ: giao diện React, biểu đồ, tài liệu} & \todo{\%} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\chapter{Hướng dẫn cài đặt và chạy}
+\label{app:caidat}
+
+\section{Yêu cầu môi trường}
+
+Python 3.10 trở lên, Node.js 18 trở lên. Không bắt buộc có GPU; hệ thống tự chọn
+CUDA nếu máy có card NVIDIA, MPS trên chip Apple, còn lại chạy CPU.
+
+\section{Khởi động máy chủ}
+
+\begin{lstlisting}[language=bash, caption={Cài đặt và chạy backend}]
+cd backend
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python run.py
+\end{lstlisting}
+
+Máy chủ lắng nghe tại \code{http://localhost:8000}, tài liệu API tại
+\code{http://localhost:8000/docs}. Lần chạy đầu tiên, thư viện Ultralytics tự tải
+tệp trọng số \code{yolov8n.pt} khoảng 6~MB.
+
+\section{Khởi động giao diện}
+
+\begin{lstlisting}[language=bash, caption={Cài đặt và chạy frontend}]
+cd frontend
+npm install
+npm run dev
+\end{lstlisting}
+
+Mở trình duyệt tại \code{http://localhost:3000}. Vite chuyển tiếp mọi lời gọi
+\code{/api} sang máy chủ ở cổng 8000, nên không cần cấu hình CORS khi phát triển.
+
+\section{Thêm camera đầu tiên}
+
+Vào trang \emph{Quản trị}, thẻ \emph{Nguồn camera}. Nhập tên, chọn loại nguồn rồi
+điền đường dẫn: số \code{0} cho webcam tích hợp, chuỗi \code{rtsp://\dots} cho
+camera IP, hoặc đường dẫn tuyệt đối tới tệp video. Bấm \emph{Kiểm tra kết nối}
+trước khi lưu.
+
+Sang trang \emph{AI Pipeline}, chọn camera vừa thêm, chọn bài toán \emph{Đếm đối
+tượng ra/vào}, kéo vạch trên ảnh, rồi bấm \emph{Lưu và chạy ngay}.
+
+\chapter{Lược đồ cơ sở dữ liệu}
+\label{app:schema}
+
+\begin{table}[H]
+\centering
+\caption{Các bảng chính trong cơ sở dữ liệu SQLite.}
+\label{tab:bangcsdl}
+\small
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\textbf{Bảng} & \textbf{Nội dung lưu trữ} \\
+\midrule
+\code{cameras}   & Danh sách camera: tên, vị trí, nguồn video, trạng thái bật/tắt \\
+\code{pipelines} & Cấu hình bài toán: loại bài toán, lớp đối tượng, toạ độ vạch \\
+\code{events}    & Sự kiện vượt vạch: thời điểm, chiều, mã vết, ảnh chụp, trạng thái xử lý \\
+\code{counts}    & Mốc số đếm ghi định kỳ, dùng dựng biểu đồ lưu lượng \\
+\code{segments}  & Chỉ mục các đoạn video đã ghi: thời điểm bắt đầu, thời lượng, đường dẫn \\
+\code{logs}      & Nhật ký hoạt động của hệ thống \\
+\code{settings}  & Cấu hình dạng khoá--giá trị, ví dụ thời hạn lưu trữ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Mã DBML sinh sơ đồ quan hệ}
+\label{app:dbml}
+
+Dán đoạn mã dưới đây vào \url{https://dbdiagram.io} để sinh sơ đồ cho
+Hình~\ref{fig:csdl}.
+
+\begin{lstlisting}[caption={Mã DBML mô tả lược đồ cơ sở dữ liệu}]
+Table cameras {
+  id text [pk]
+  name text
+  location text
+  source text
+  kind text
+  enabled int
+  retention_days int
+  created_at text
+}
+
+Table pipelines {
+  id text [pk]
+  name text
+  camera_id text [ref: > cameras.id]
+  task text
+  classes text
+  line text
+  flip int
+  conf real
+  active int
+  created_at text
+}
+
+Table events {
+  id text [pk]
+  ts text
+  camera_id text [ref: > cameras.id]
+  pipeline_id text [ref: > pipelines.id]
+  type text
+  direction text
+  label text
+  track_id int
+  snapshot text
+  message text
+  status text
+  note text
+  handled_at text
+}
+
+Table counts {
+  id int [pk, increment]
+  ts text
+  camera_id text [ref: > cameras.id]
+  pipeline_id text [ref: > pipelines.id]
+  in_total int
+  out_total int
+  occupancy int
+}
+
+Table segments {
+  id text [pk]
+  camera_id text [ref: > cameras.id]
+  start_ts text
+  end_ts text
+  path text
+  duration real
+}
+\end{lstlisting}
+
+\section{Mã PlantUML sinh sơ đồ kiến trúc}
+\label{app:plantuml}
+
+Dán vào \url{https://www.plantuml.com/plantuml} để sinh ảnh cho
+Hình~\ref{fig:kientruc}.
+
+\begin{lstlisting}[caption={Mã PlantUML mô tả kiến trúc hệ thống}]
+@startuml
+skinparam componentStyle rectangle
+skinparam defaultFontName Arial
+
+package "Trinh duyet" {
+  [Giao dien React] as UI
+}
+
+package "May chu Python (FastAPI)" {
+  [REST API] as API
+  [Camera Manager] as MGR
+  [Camera Worker] as WK
+  [Detector\nYOLOv8 + ByteTrack] as DET
+  [Counter\nCentroidCrossing] as CNT
+  [Segment Recorder] as REC
+  [Search\nphan tich cau tieng Viet] as SRCH
+}
+
+database "SQLite" as DB
+folder "Dia cung" as FS
+
+UI --> API : REST + MJPEG
+API --> MGR
+MGR --> WK : mot luong moi camera
+WK --> DET
+DET --> CNT
+WK --> REC
+API --> SRCH
+SRCH --> DB
+CNT --> DB : su kien + so dem
+REC --> FS : doan MP4
+WK --> FS : anh chup JPEG
+@enduml
+\end{lstlisting}
+
+\chapter{Danh sách điểm cuối API}
+\label{app:api}
+
+\begin{longtable}{@{}p{2cm}p{7.5cm}p{5cm}@{}}
+\toprule
+\textbf{Phương thức} & \textbf{Đường dẫn} & \textbf{Chức năng} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Phương thức} & \textbf{Đường dẫn} & \textbf{Chức năng} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+
+GET    & \code{/api/health}                        & Kiểm tra máy chủ và thiết bị tính toán \\
+GET    & \code{/api/summary}                       & Số liệu tổng hợp trong ngày \\
+\midrule
+GET    & \code{/api/cameras}                       & Danh sách camera kèm trạng thái thực \\
+POST   & \code{/api/cameras}                       & Thêm camera \\
+PATCH  & \code{/api/cameras/\{id\}}                & Sửa thông tin camera \\
+DELETE & \code{/api/cameras/\{id\}}                & Xoá camera \\
+POST   & \code{/api/cameras/probe}                 & Thử mở nguồn video \\
+POST   & \code{/api/cameras/\{id\}/toggle}         & Bật hoặc tắt luồng \\
+GET    & \code{/api/cameras/\{id\}/stream}         & Luồng MJPEG \\
+GET    & \code{/api/cameras/\{id\}/snapshot}       & Một khung hình JPEG \\
+GET    & \code{/api/cameras/\{id\}/state}          & Số đếm và hộp phát hiện tức thời \\
+\midrule
+GET    & \code{/api/pipelines}                     & Danh sách pipeline \\
+GET    & \code{/api/pipelines/tasks}               & Danh mục bài toán và lớp đối tượng \\
+POST   & \code{/api/pipelines}                     & Tạo pipeline \\
+PATCH  & \code{/api/pipelines/\{id\}}              & Sửa cấu hình \\
+DELETE & \code{/api/pipelines/\{id\}}              & Xoá pipeline \\
+POST   & \code{/api/pipelines/\{id\}/start}        & Kích hoạt \\
+POST   & \code{/api/pipelines/\{id\}/stop}         & Dừng \\
+POST   & \code{/api/pipelines/\{id\}/reset}        & Đặt lại số đếm về 0 \\
+\midrule
+GET    & \code{/api/events}                        & Danh sách sự kiện có lọc \\
+PATCH  & \code{/api/events/\{id\}}                 & Xác nhận xử lý hoặc đóng \\
+GET    & \code{/api/events/\{id\}/snapshot}        & Ảnh chụp của sự kiện \\
+GET    & \code{/api/search}                        & Tìm kiếm bằng câu tiếng Việt \\
+GET    & \code{/api/counts}                        & Chuỗi số đếm theo giờ \\
+\midrule
+GET    & \code{/api/playback/timeline}             & Đoạn ghi hình và sự kiện của một ngày \\
+GET    & \code{/api/playback/segments}             & Danh sách đoạn ghi hình \\
+GET    & \code{/api/playback/dates}                & Các ngày có dữ liệu \\
+GET    & \code{/api/playback/segments/\{id\}/video} & Phát video, hỗ trợ tua \\
+GET    & \code{/api/playback/at}                   & Tìm đoạn chứa một mốc thời gian \\
+\midrule
+GET    & \code{/api/admin/settings}                & Đọc cấu hình hệ thống \\
+PUT    & \code{/api/admin/settings}                & Cập nhật cấu hình \\
+GET    & \code{/api/admin/storage}                 & Dung lượng đang dùng \\
+POST   & \code{/api/admin/storage/purge}           & Dọn dữ liệu quá hạn \\
+GET    & \code{/api/admin/logs}                    & Nhật ký hoạt động \\
+GET    & \code{/api/admin/system}                  & Thông tin môi trường chạy \\
+
+\end{longtable}

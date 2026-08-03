@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Dữ liệu sinh ra lúc chạy
+backend/data/
+*.db
+*.db-wal
+*.db-shm
+
+# Trọng số mô hình (tự tải lại khi chạy)
+*.pt
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# LaTeX
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.run.xml
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+report/main.pdf
+
+# Hệ điều hành / trình soạn thảo
+.DS_Store
+.idea/
+.vscode/
+
+# Video test
+videos/

@@ -1,0 +1,703 @@
+% ─────────────────────────────────────────────────────────────────────────────
+%  Chương 3 — Các kết quả đã đạt được
+%  Hướng dẫn của Khoa: giới thiệu sản phẩm, giao diện, chức năng chính; nếu có
+%  kết quả kiểm thử thì nêu test case, phân tích lỗi và cách khắc phục.
+%
+%  LƯU Ý: Các số liệu trong chương này đo trên máy Apple M4 / 24 GB, macOS 26.4,
+%  PyTorch 2.13 chạy trên MPS, trọng số yolov8n. Chạy lại trên máy và dữ liệu
+%  của bạn rồi cập nhật, đừng chép nguyên số.
+% ─────────────────────────────────────────────────────────────────────────────
+\chapter{Các kết quả đã đạt được}
+\label{ch:ketqua}
+
+\section{Sản phẩm bàn giao}
+\label{sec:sanpham}
+
+Sản phẩm là một ứng dụng web hoàn chỉnh gồm máy chủ xử lý ảnh và giao diện quản
+trị, chạy được trên máy tính cá nhân không cần GPU rời. Mã nguồn chia hai thư mục
+\code{backend/} và \code{frontend/}, kèm tài liệu cài đặt.
+
+\begin{table}[H]
+\centering
+\caption{Quy mô mã nguồn theo thành phần.}
+\label{tab:quymo}
+\small
+\begin{tabularx}{\textwidth}{@{}lXr@{}}
+\toprule
+\textbf{Thành phần} & \textbf{Nội dung} & \textbf{Số dòng} \\
+\midrule
+\code{backend/app/}  & Engine xử lý ảnh, REST API, truy cập cơ sở dữ liệu & 3.729 \\
+\code{frontend/src/} & Giao diện React, TypeScript & 2.768 \\
+\code{scripts/}      & Script đo thực nghiệm & 197 \\
+\code{report/}       & Mã nguồn LaTeX của báo cáo này & 1.620 \\
+\midrule
+\multicolumn{2}{@{}l}{\textbf{Tổng cộng}} & \textbf{8.314} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Số dòng đếm bằng \code{wc -l}, đã bao gồm chú thích và dòng trống.
+
+Máy chủ cung cấp 31 điểm cuối API, chia thành năm nhóm: camera, pipeline, sự
+kiện, xem lại và quản trị. Tài liệu API tự sinh theo chuẩn OpenAPI, truy cập tại
+\code{/docs}.
+
+\section{Giao diện và chức năng chính}
+\label{sec:chucnang}
+
+\subsection{Trang giám sát}
+
+% TODO: Chụp màn hình trang Xem trực tiếp, lưu vào figures/ui_live.png
+\begin{figure}[H]
+\centering
+% \includegraphics[width=\textwidth]{figures/ui_live.png}
+\fbox{\parbox[c][6cm][c]{0.9\textwidth}{\centering\todo{Ảnh chụp màn hình trang
+Giám sát: lưới camera chiếm toàn màn, hộp giới hạn quanh người, vạch đếm màu vàng,
+mũi tên Vào/Ra, số đếm ở góc dưới mỗi ô}}}
+\caption{Trang giám sát. Lưới tự co số cột theo số camera đang hiển thị nên khung
+hình luôn lấp hết chiều ngang và chiều cao còn lại.}
+\label{fig:ui-live}
+\end{figure}
+
+Lưới hiển thị chuyển được giữa ba mức 1$\times$1, 2$\times$2 và 3$\times$3. Mỗi ô
+hiện tên camera, trạng thái kết nối, tốc độ xử lý và độ phân giải. Nút nguồn trên
+từng ô cho phép ngắt luồng, khi đó ô chuyển sang màn hình chờ và hệ thống tự kết
+nối lại theo chu kỳ ba giây.
+
+% TODO: Chụp màn hình camera đang phóng to kèm bảng cảnh báo, lưu vào figures/ui_alert.png
+\begin{figure}[H]
+\centering
+% \includegraphics[width=\textwidth]{figures/ui_alert.png}
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering\todo{Ảnh chụp camera đang phóng
+to: khung hình lớn bên trái, bảng "Cảnh báo camera này" bên phải kèm ảnh chụp từng
+lượt và hai nút Xác nhận, Đóng}}}
+\caption{Cảnh báo chỉ hiện khi phóng to một camera đang chạy pipeline, và chỉ hiện
+cảnh báo của đúng camera đó.}
+\label{fig:ui-alert}
+\end{figure}
+
+Bảng cảnh báo làm mới bốn giây một lần. Mỗi sự kiện có hai nút: xác nhận chuyển
+trạng thái sang \emph{đang xử lý}, đóng chuyển sang \emph{đã đóng} kèm thời điểm
+xử lý.
+
+Ảnh trong bảng cảnh báo chỉ rộng 200 điểm ảnh, đủ để biết có chuyện gì xảy ra
+nhưng không đủ để nhận mặt người. Bấm vào ảnh sẽ mở bản 1280 điểm ảnh phủ kín màn
+hình, đóng lại bằng phím \code{Esc}, bằng nút đóng, hoặc bằng cách bấm ra ngoài
+khung. Cùng một thành phần giao diện được dùng lại ở trang xem lại, khác ở chỗ
+tại đó có thêm nút nhảy tới đúng giây trong đoạn video --- ở màn giám sát trực
+tiếp thì không có đoạn video tương ứng nên nút tự ẩn.
+
+\subsection{Trang cấu hình}
+
+% TODO: Chụp màn hình bước vẽ vạch, lưu vào figures/ui_pipeline.png
+\begin{figure}[H]
+\centering
+% \includegraphics[width=\textwidth]{figures/ui_pipeline.png}
+\fbox{\parbox[c][6cm][c]{0.9\textwidth}{\centering\todo{Ảnh chụp bước 3 của trình
+hướng dẫn: ảnh từ camera, vạch vàng kéo được bằng chuột, hai mũi tên xanh/đỏ chỉ
+chiều Vào/Ra}}}
+\caption{Bước vẽ vạch đếm. Hai mũi tên cho biết phía nào được tính là Vào trước
+khi pipeline chạy, tránh phải chạy thử rồi mới phát hiện ngược chiều.}
+\label{fig:ui-pipeline}
+\end{figure}
+
+Trình hướng dẫn bỏ qua bước vẽ vạch khi người dùng chọn bài toán nhận diện, vì
+bài toán này không cần ranh giới. Pipeline đang chạy nhận cấu hình mới ngay khi
+lưu, không phải tắt đi bật lại.
+
+Bảng pipeline đã tạo liệt kê tên, camera, bài toán, chế độ và trạng thái. Nút
+\emph{Sửa} mở lại chính trình hướng dẫn đó với dữ liệu đã điền sẵn, bắt đầu từ
+bước chọn bài toán --- bước chọn camera bị khoá vì pipeline gắn chặt với camera
+nó theo dõi, muốn đổi camera thì tạo pipeline mới. Sửa được cả vạch, vùng lẫn mọi
+tham số, kể cả khi pipeline đang chạy.
+
+\subsubsection*{Quan hệ nhiều--nhiều giữa camera và pipeline}
+\label{sub:nhieu-pipeline}
+
+Bản đầu chỉ cho mỗi camera chạy đúng một pipeline: hàm \code{attach\_pipeline}
+chủ động tắt các pipeline khác của cùng camera. Ràng buộc này không hợp với nhu
+cầu thực tế --- một camera cổng vừa cần đếm người qua cửa vừa cần đếm xe trong
+bãi, hai bài toán khác nhau trên cùng khung hình.
+
+Về phía chạy, mỗi pipeline cần bộ bám vết, bộ đếm, bộ lọc Thông minh và lịch chạy
+riêng; dùng chung sẽ lẫn số đếm và lẫn mã định danh vết. Toàn bộ những thứ đó
+được gom vào lớp \code{PipelineRuntime}, còn \code{CameraWorker} giữ một danh
+sách các runtime thay vì một bộ biến đơn lẻ.
+
+Điểm phải cân nhắc là chi phí GPU. Cách làm thẳng thừng --- mỗi pipeline tự gọi
+YOLO một lần --- khiến ba pipeline tốn gấp ba lần suy luận, trong khi
+mục~\ref{sub:mps-segfault} đã cho thấy GPU chính là nút thắt của hệ thống. Vì vậy
+phần phát hiện được tách khỏi phần bám vết: vòng lặp gọi YOLO \emph{một lần} với
+hợp các lớp cần tìm và ngưỡng tin cậy thấp nhất, rồi mỗi pipeline tự lọc lại theo
+lớp và ngưỡng của riêng nó và tự bám vết. Chi phí GPU vì thế không tăng theo số
+pipeline.
+
+Ở màn giám sát, vẽ chồng kết quả của mọi pipeline lên một khung hình sẽ rối, nên
+mỗi pipeline giữ bản vẽ riêng và ô camera có nút chuyển qua lại; luồng video nhận
+thêm tham số \code{pipeline\_id}.
+
+Chiều ngược lại --- một lần tạo cho nhiều camera --- không cần đổi lược đồ cơ sở
+dữ liệu: trình hướng dẫn cho tick nhiều camera rồi sinh ra mỗi camera một pipeline
+độc lập, cùng tham số nhưng số đếm tách bạch, tên ghép thêm tên camera cho khỏi
+trùng. Riêng hình vẽ bắt buộc phải làm cho từng camera, vì vạch đặt trên khung
+hình camera này không có ý nghĩa gì trên camera khác; bước vẽ vì thế có dải chọn
+camera kèm chỉ báo camera nào còn thiếu hình, và nút sang bước sau chỉ mở khi mọi
+camera đã có vạch hoặc vùng của riêng nó.
+
+\subsubsection*{Hai lỗi trong đường cập nhật}
+
+Chức năng sửa dùng \code{PATCH /api/pipelines/\{id\}}, một endpoint có sẵn từ
+trước nhưng chưa nơi nào gọi. Đưa vào sử dụng thì lộ ra hai lỗi.
+
+Thứ nhất, endpoint dùng \code{model\_dump(exclude\_none=True)}, tức là mọi trường
+mang giá trị null đều bị loại khỏi câu lệnh cập nhật. Với ngữ nghĩa của PATCH thì
+đây là sai: null là ý muốn \emph{xoá} --- tắt ngưỡng cảnh báo, bỏ lịch chạy,
+chuyển luồng Thông minh về Tiêu chuẩn. Kết quả là các thao tác xoá đó không có
+tác dụng, giá trị cũ vẫn nằm nguyên trong cơ sở dữ liệu mà giao diện lại báo lưu
+thành công. Sửa bằng \code{exclude\_unset=True}: chỉ bỏ qua trường client không
+gửi, còn trường có gửi thì áp dụng đúng giá trị kể cả null.
+
+Thứ hai, và nguy hiểm hơn, đường tạo mới dùng \code{model\_dump(by\_alias=True)}
+còn đường cập nhật thì không. Trường \code{ScheduleSlot.from\_} mang bí danh
+\code{from} vì \code{from} là từ khoá của Python, nên thiếu \code{by\_alias} thì
+lịch chạy được lưu xuống với khoá \code{from\_}. Trong khi đó \code{schedule.py}
+đọc thẳng \code{slot["from"]}. Hậu quả không phải là chạy sai lịch mà là
+\code{KeyError} ném ra từ \code{describe()} ngay trong vòng lặp worker, đủ để
+giết luồng camera của pipeline vừa sửa.
+
+Lỗi thứ hai đáng chú ý ở chỗ nó chỉ xuất hiện khi hội đủ ba điều kiện: sửa một
+pipeline, pipeline đó có bật lịch chạy, và pipeline đó đang chạy. Không có chức
+năng sửa thì đường mã này không bao giờ được thực thi, nên lỗi nằm im trong mã
+nguồn từ đầu mà mọi phép thử trước đó đều không chạm tới.
+
+\subsection{Trang xem lại và tìm kiếm}
+
+% TODO: Chụp màn hình trang Xem lại, lưu vào figures/ui_playback.png
+\begin{figure}[H]
+\centering
+% \includegraphics[width=\textwidth]{figures/ui_playback.png}
+\fbox{\parbox[c][6cm][c]{0.9\textwidth}{\centering\todo{Ảnh chụp trang Xem lại:
+trình phát video, thanh thời gian 24 giờ có các vùng xanh là đoạn đã ghi và các
+vạch nhỏ là sự kiện, ô tìm kiếm tiếng Việt bên phải}}}
+\caption{Trang xem lại. Thanh thời gian gộp cả vùng đã ghi hình lẫn vị trí sự
+kiện; bấm vào một vạch sự kiện sẽ tua video tới đúng giây đó.}
+\label{fig:ui-playback}
+\end{figure}
+
+\section{Kết quả thực nghiệm}
+\label{sec:thucnghiem}
+
+Môi trường đo: Apple M4, 24~GB bộ nhớ, macOS~26.4, Python~3.12, PyTorch~2.13
+chạy trên MPS, trọng số \code{yolov8n.pt}, kích thước ảnh vào 960 điểm ảnh.
+
+\subsection{Ảnh hưởng của ngưỡng ghép vết ByteTrack}
+
+Thí nghiệm chạy trên \code{walkback.mp4} (2160$\times$3840, 24~fps, 480 khung
+hình, hai người trong cảnh), giữ nguyên mọi tham số khác và chỉ đổi
+\code{minimum\_matching\_threshold}.
+
+\begin{table}[H]
+\centering
+\caption{Ngưỡng ghép vết quyết định độ bền của track. Giá trị 0{,}3 làm vết vỡ
+vụn thành 65 mảnh dù cảnh chỉ có hai người.}
+\label{tab:bytetrack}
+\small
+\begin{tabular}{@{}rrrrrr@{}}
+\toprule
+\textbf{Ngưỡng} & \textbf{IoU tối thiểu} & \textbf{Số mã ID} &
+\textbf{Độ dài trung vị} & \textbf{Vào} & \textbf{Ra} \\
+\midrule
+0{,}3 & 0{,}7 & 65 & 2 khung   & 2 & 2 \\
+0{,}5 & 0{,}5 & 2  & 480 khung & 2 & 2 \\
+0{,}7 & 0{,}3 & 2  & 480 khung & 2 & 2 \\
+0{,}8 & 0{,}2 & 2  & 480 khung & 2 & 2 \\
+0{,}9 & 0{,}1 & 2  & 480 khung & 2 & 2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Ở ngưỡng 0{,}3, hai người sinh ra 65 mã định danh với độ dài trung vị chỉ hai
+khung hình. Từ 0{,}5 trở lên, mỗi người giữ đúng một mã suốt cả đoạn video.
+
+Số đếm vẫn đúng bằng 2 ở mọi ngưỡng, kể cả 0{,}3. Kết quả này cho thấy cơ chế nối
+lại vết theo không gian mô tả ở Mục~\ref{sec:dem} bù được phần lớn thiệt hại do
+vết đứt gãy. Hệ thống vẫn đặt mặc định 0{,}9 vì vết liền mạch giúp ảnh chụp sự
+kiện và mã định danh hiển thị trên màn hình có ý nghĩa với người xem.
+
+\subsection{Điểm neo: bàn chân so với tâm hộp}
+
+Cùng đoạn video hai người, so sánh hai lựa chọn điểm neo ở các vị trí vạch khác
+nhau. Cột \emph{tâm hộp} tắt luôn vùng đệm và độ trễ xác nhận, tái hiện đúng cách
+làm của \code{LineZone} nguyên bản.
+
+\begin{table}[H]
+\centering
+\caption{Điểm neo bàn chân loại bỏ hiện tượng đếm dư. Với vạch dọc giữa khung,
+tâm hộp báo 5 lượt mỗi chiều trong khi cảnh chỉ có hai người.}
+\label{tab:anchor}
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\multirow{2}{*}{\textbf{Vị trí vạch}} &
+\multicolumn{2}{c}{\textbf{Điểm neo bàn chân}} &
+\multicolumn{2}{c}{\textbf{Tâm hộp}} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+ & \textbf{Vào} & \textbf{Ra} & \textbf{Vào} & \textbf{Ra} \\
+\midrule
+Ngang 40\% & 0 & 0 & 0 & 0 \\
+Ngang 50\% & 0 & 0 & 2 & 2 \\
+Ngang 60\% & \textbf{2} & \textbf{2} & 0 & 0 \\
+Ngang 70\% & 0 & 0 & 0 & 0 \\
+Dọc 30\%   & 0 & 0 & 0 & 0 \\
+Dọc 50\%   & 0 & 0 & \textbf{5} & \textbf{5} \\
+Dọc 70\%   & 0 & 0 & 1 & 1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Hàng \emph{dọc 50\%} là trường hợp đáng chú ý nhất. Hai người trong cảnh đi dọc
+theo phương của vạch chứ không cắt qua nó, nên đáp án đúng là không đếm lượt nào.
+Điểm neo bàn chân cho đúng 0. Tâm hộp báo 5 lượt vào và 5 lượt ra, toàn bộ sinh ra
+từ dao động của tâm hộp khi kích thước hộp thay đổi theo bước chân.
+
+Ở vạch ngang 60\%, điểm neo bàn chân cho kết quả 2 vào và 2 ra, khớp với nội dung
+đoạn video: hai người đi khỏi camera rồi quay lại.
+
+Vị trí vạch ảnh hưởng mạnh không kém lựa chọn điểm neo. Cùng điểm neo bàn chân,
+vạch ở 50\% và 70\% chiều cao đều cho 0, chỉ vạch ở 60\% mới bắt được đúng chỗ
+bàn chân đi qua. Đây là lý do giao diện cho phép kéo vạch trực tiếp trên ảnh thay
+vì cố định ở giữa khung hình.
+
+\subsection{Luồng Thông minh: chi phí và khả năng lọc}
+
+Thí nghiệm chạy trên một khung hình có hai người, cắt hộp rồi hỏi bộ lọc thông minh bốn truy vấn
+khác nhau.
+
+\begin{table}[H]
+\centering
+\caption{Khả năng lọc thuộc tính trên khung hình hai người. Lần
+gọi đầu tiên chậm do khởi động, các lần sau ổn định ở khoảng 1,2 giây cho hai khung cắt.}
+\label{tab:la3b}
+\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Truy vấn} & \textbf{Số khung cắt giữ lại} & \textbf{Thời gian} \\
+\midrule
+\code{person}                  & 2/2 & 5,4 s (có khởi động) \\
+\code{person with backpack}    & 2/2 & 1,2 s \\
+\code{person in red shirt}     & 1/2 & 1,2 s \\
+\code{person holding umbrella} & 1/2 & 1,2 s \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Mô hình phân biệt được thuộc tính: truy vấn \code{person} giữ cả hai người, còn
+\code{red shirt} và \code{umbrella} chỉ giữ một. Riêng \code{backpack} giữ cả hai, tức
+là có nhận nhầm --- xem phần hạn chế ở Mục~\ref{sec:hanche}.
+
+Đo trên luồng camera đang chạy thật với câu lệnh \emph{"người mặc áo trắng"}: hệ thống
+gọi LA-3B 9 lần, kết quả 4 khớp và 5 bị loại, tốc độ xử lý giữ ở \textbf{18 khung hình
+mỗi giây}. So với 45 khung hình mỗi giây của luồng Tiêu chuẩn trên cùng nguồn video, chi
+phí giảm khoảng 60\% nhưng vẫn dư so với nhịp 15 khung hình mỗi giây mà hệ thống đặt làm
+mục tiêu. Con số này chỉ đạt được nhờ ba cơ chế mô tả ở Mục~\ref{sec:thongminh}; gọi
+LA-3B trực tiếp trong vòng lặp sẽ kéo tốc độ xuống dưới 1 khung hình mỗi giây.
+
+Mô hình nạp trong 11,9 giây và chiếm 8,2~GB bộ nhớ GPU.
+
+\subsection{Cách diễn đạt truy vấn quyết định chất lượng lọc}
+\label{sec:cachdien}
+
+Thí nghiệm này xuất phát từ một lỗi người dùng báo: gõ \emph{"người đeo túi"} nhưng hệ
+thống giữ lại cả người có túi lẫn người không.
+
+Chọn một khung hình ở sảnh nhà ga có 37 người, cắt hộp rồi hỏi cùng một nội dung nhưng
+diễn đạt theo hai cách khác nhau.
+
+\begin{table}[H]
+\centering
+\caption{Câu truy vấn bắt đầu bằng chủ ngữ chỉ người gần như không lọc được gì. Đưa
+thẳng vật thể thì mô hình mới thực sự đi tìm vật thể đó.}
+\label{tab:truyvan}
+\small
+\begin{tabular}{@{}llcc@{}}
+\toprule
+\textbf{Người dùng gõ} & \textbf{Truy vấn đưa vào} & \textbf{Giữ lại} & \textbf{Tỉ lệ} \\
+\midrule
+--- & \code{person} (nền) & 36/37 & 97\% \\
+\midrule
+người đeo ba lô & \code{person with backpack} & 32/37 & 86\% \\
+người đeo ba lô & \code{backpack} & \textbf{9/37} & \textbf{24\%} \\
+\addlinespace
+người xách túi & \code{handbag man} & 34/37 & 92\% \\
+người xách túi & \code{handbag} & \textbf{14/37} & \textbf{38\%} \\
+\addlinespace
+người đeo túi & \code{the man with the bag} & 29/37 & 78\% \\
+người đeo túi & \code{bag} & \textbf{16/37} & \textbf{43\%} \\
+\addlinespace
+người cầm ô & \code{person holding umbrella} & 7/37 & 19\% \\
+người cầm ô & \code{umbrella} & \textbf{0/37} & \textbf{0\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Khi câu bắt đầu bằng \code{person}, mô hình bám vào chính chữ đó và gần như bỏ qua vế
+mô tả phía sau: tỉ lệ giữ lại 78--92\%, chỉ nhỉnh hơn chút so với mức 97\% của truy vấn
+\code{person} thuần. Bỏ chủ ngữ đi, chỉ để lại vật thể, tỉ lệ tụt xuống 24--43\%.
+
+Hàng cuối là phép thử đối chứng: sảnh nhà ga trong nhà, không ai cầm ô. Truy vấn
+\code{umbrella} trả về đúng 0, còn \code{person holding umbrella} vẫn nhận nhầm 7 người.
+
+Để kiểm tra xem 24\% kia có thật sự đúng hay chỉ là lọc bừa, tôi ghép ảnh các khung cắt
+được giữ lại và các khung bị loại rồi đối chiếu bằng mắt. Cả 9 khung được giữ với truy
+vấn \code{backpack} đều là người thật sự mang ba lô hoặc túi cỡ lớn; phần lớn khung bị
+loại là người tay không hoặc chỉ xách túi nhỏ. Đây là hành vi đúng của từ
+\emph{backpack}.
+
+Kết quả này dẫn tới thay đổi trong tầng dịch: từ điển Việt--Anh giờ ánh xạ
+\emph{"người đeo ba lô"} thành \code{backpack} chứ không phải \code{person with
+backpack}, và bản dịch tự động cũng bị cắt bỏ phần chủ ngữ đứng đầu trước khi dùng.
+
+\subsection{Tốc độ xử lý}
+
+\begin{table}[H]
+\centering
+\caption{Tốc độ xử lý theo độ phân giải nguồn, đo trên Apple M4 với yolov8n.}
+\label{tab:hieunang}
+\small
+\begin{tabularx}{\textwidth}{@{}Xrrr@{}}
+\toprule
+\textbf{Nguồn} & \textbf{Độ phân giải} & \textbf{Tốc độ xử lý} & \textbf{Độ trễ} \\
+\midrule
+\code{store\_long.mp4}  & 720$\times$404   & 62{,}9 fps & 16 ms \\
+\code{walkback.mp4}     & 2160$\times$3840 & 45{,}1 fps & 22 ms \\
+Luồng đang chạy kèm ghi hình & 720$\times$404 & 42{,}4 fps & 19 ms \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Cả ba trường hợp đều vượt xa nhịp 15 khung hình mỗi giây mà hệ thống đặt làm mục
+tiêu, nên vòng lặp chủ động nghỉ giữa các khung để nhường CPU. Với cấu hình này,
+một máy có thể phục vụ đồng thời nhiều camera.
+
+\todo{Nếu chạy trên máy không có GPU, đo lại và bổ sung một hàng cho CPU thuần.
+Ghi rõ cấu hình máy để người đọc so sánh được.}
+
+\section{Kịch bản kiểm thử}
+\label{sec:kiemthu}
+
+\begin{table}[H]
+\centering
+\caption{Các kịch bản kiểm thử chức năng đã thực hiện.}
+\label{tab:testcase}
+\small
+\begin{tabularx}{\textwidth}{@{}llXl@{}}
+\toprule
+\textbf{Mã} & \textbf{Chức năng} & \textbf{Kết quả mong đợi} & \textbf{Trạng thái} \\
+\midrule
+TC-01 & Kiểm tra nguồn video & Trả về độ phân giải và nhịp khung hình & Đạt \\
+TC-02 & Thêm camera & Camera vào danh sách, luồng khởi động & Đạt \\
+TC-03 & Tắt/bật camera & Luồng dừng và khởi động lại đúng trạng thái & Đạt \\
+TC-04 & Nguồn hỏng & Chuyển \emph{mất kết nối}, tự thử lại mỗi 3 giây & Đạt \\
+TC-05 & Tạo pipeline đếm & Ghi vào CSDL, trả về mã pipeline & Đạt \\
+TC-06 & Chạy pipeline & Hộp giới hạn và vạch hiện trên luồng & Đạt \\
+TC-07 & Đếm vượt vạch & Số đếm tăng, sinh sự kiện kèm ảnh & Đạt \\
+TC-08 & Đặt lại số đếm & Vào và Ra về 0, pipeline vẫn chạy & Đạt \\
+TC-09 & Ghi hình phân đoạn & Sinh tệp MP4 mỗi 60 giây & Đạt \\
+TC-10 & Tua video xem lại & Thanh tua hoạt động nhờ hỗ trợ Range & Đạt \\
+TC-11 & Tìm kiếm tiếng Việt & Phân tích đúng đối tượng, chiều, thời gian & Đạt \\
+TC-12 & Xác nhận và đóng cảnh báo & Trạng thái đổi, ghi thời điểm xử lý & Đạt \\
+TC-13 & Dọn dữ liệu quá hạn & Xoá cả bản ghi lẫn tệp trên đĩa & \todo{xác nhận} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\todo{Chạy lại toàn bộ kịch bản trên môi trường của bạn, cập nhật cột trạng thái
+và chụp màn hình minh hoạ cho vài kịch bản quan trọng.}
+
+\section{Một số lỗi gặp phải và cách khắc phục}
+\label{sec:loi}
+
+\subsection{Đếm dư ở cảnh người đi thẳng vào camera}
+
+Bản cài đặt đầu tiên dùng tâm hộp giới hạn và đếm dư nhiều lần, đúng như số liệu
+ở Bảng~\ref{tab:anchor}. Ban đầu tôi nghi ngờ bộ bám vết, nhưng kiểm tra lại thì
+mã định danh hoàn toàn ổn định --- chỉ có hai vết cho hai người. Nguyên nhân nằm
+ở chỗ khác: hộp giới hạn phình ra thu vào theo nhịp bước chân, kéo theo tâm hộp
+dao động vắt qua vạch.
+
+Cách khắc phục gồm ba phần đã trình bày ở Mục~\ref{sec:dem}: đổi điểm neo sang
+bàn chân, thêm vùng đệm quanh vạch, và yêu cầu phía mới phải giữ ổn định vài
+khung hình.
+
+\subsection{Video ghi ra không phát được trên trình duyệt}
+
+Trình duyệt chỉ phát trực tiếp được MP4 mã hoá H.264. Bản OpenCV cài qua
+\code{pip} thường không kèm bộ mã hoá này vì vướng bản quyền, nên
+\code{VideoWriter} lặng lẽ lùi về \code{mp4v} và tệp sinh ra không mở được trong
+thẻ \code{<video>}.
+
+Chương trình hiện thử \code{avc1} trước, thất bại thì dùng \code{mp4v} và ghi
+cảnh báo vào nhật ký để người vận hành biết cần chuyển mã bằng \code{ffmpeg}.
+
+\subsection{Không phát hiện được đối tượng trên một video mẫu}
+
+Trong lúc kiểm thử, một video mẫu cho ra 0 hộp ở mọi khung hình. Tôi lần lượt
+loại trừ: bỏ bộ lọc lớp, hạ ngưỡng tin cậy, đổi kích thước ảnh vào, chuyển từ MPS
+sang CPU --- kết quả vẫn bằng 0. Chạy thử trên ảnh mẫu \code{bus.jpg} của
+Ultralytics thì mô hình phát hiện đủ 5 đối tượng.
+
+Nguyên nhân hoá ra rất đơn giản: đoạn video đó gần như không có người trong
+khung. Bài học rút ra là khi gỡ lỗi mô hình, nên kiểm chứng trên một mẫu đã biết
+trước kết quả thay vì tiếp tục chỉnh tham số.
+
+\subsection{Giao diện treo vì hết hạn mức kết nối của trình duyệt}
+\label{sub:mjpeg-connection-limit}
+
+Sau khi cho phép nhiều pipeline chạy trên một camera, giao diện bắt đầu báo
+``máy chủ không phản hồi'' ở trang cấu hình. Điều khó hiểu là backend hoàn toàn
+khoẻ: gọi thẳng bằng \code{curl}, cả ba endpoint đều trả về trong khoảng
+2--5 mili giây.
+
+Đếm số kết nối đang mở mới thấy vấn đề. Trình duyệt giữ đúng sáu kết nối tới máy
+chủ, tất cả đều là luồng MJPEG. Sáu là hạn mức kết nối đồng thời trên mỗi tên
+miền của HTTP/1.1 --- mọi trình duyệt hiện nay đều áp. Luồng MJPEG là kết nối
+sống mãi không đóng, nên chỉ cần sáu luồng là mọi lời gọi API xếp hàng vô hạn.
+
+Nguồn gốc nằm ở chỗ endpoint luồng video được viết đồng bộ và điều kiện dừng duy
+nhất là \code{worker.is\_alive()}. Người xem đóng tab hay đổi sang pipeline khác
+thì vòng lặp vẫn chạy tiếp, kết nối bị bỏ lại vĩnh viễn. Mỗi lần thao tác là rò
+rỉ thêm một chỗ trong hạn mức sáu.
+
+Khắc phục cần ba lớp, và phải đủ cả ba mới hết.
+
+Thứ nhất, ở phía máy chủ, chuyển endpoint sang bất đồng bộ và tự hỏi
+\code{request.is\_disconnected()} ở mỗi vòng lặp; phần nén JPEG đẩy sang luồng
+phụ bằng \code{anyio.to\_thread.run\_sync} để không chặn vòng lặp sự kiện. Đo với
+bốn luồng mở đồng thời: 8 kết nối khi đang xem, về 0 sau khi ngắt.
+
+Thứ hai, ở phía trình duyệt, phải chủ động huỷ yêu cầu trước khi thẻ \code{<img>}
+biến mất. Gỡ thẻ khỏi cây DOM \emph{không} làm trình duyệt đóng kết nối MJPEG ---
+đó là phản hồi không bao giờ kết thúc nên trình duyệt giữ socket lại, và máy chủ
+vì thế cũng không bao giờ nhận được tín hiệu ngắt để mà phản ứng. Thiếu lớp này
+thì lớp thứ nhất không có cơ hội chạy.
+
+Cách huỷ mới là chỗ đáng nhớ. Gán \code{src} rỗng đủ để Chromium huỷ yêu cầu,
+nhưng WebKit thì không --- nó giữ nguyên kết nối. Trên Safari, mỗi lần chuyển
+trang trong ứng dụng là ba kết nối chết nằm lại; đủ sáu cái là mọi luồng mới đều
+đen và không còn cách nào hồi ngoài đóng tab.
+
+Gốc rễ nằm ở chỗ \emph{chuỗi rỗng không phải là lệnh huỷ}. Nó là một URL tương
+đối rỗng, và theo chuẩn thì phân giải thành địa chỉ của chính trang đang mở. Đo
+trực tiếp trong trình duyệt:
+
+\begin{lstlisting}[caption={Chuỗi rỗng phân giải thành địa chỉ trang, không phải ``không có ảnh''}]
+img.src = 'http://localhost:8000/api/cameras/abc/stream';
+img.src = '';
+img.getAttribute('src')  // ''
+img.src                  // 'http://localhost:3000/'
+\end{lstlisting}
+
+Nói cách khác, câu lệnh đó không bảo trình duyệt dừng lại mà bảo nó \emph{đổi
+sang tải trang HTML hiện tại làm ảnh}. Việc huỷ yêu cầu cũ chỉ là hệ quả phụ của
+thao tác đổi ảnh, nên mỗi nhân trình duyệt xử lý một kiểu --- nhất là với
+\code{multipart/x-mixed-replace}, một cơ chế không nằm trong chuẩn HTML và có
+phản hồi không bao giờ kết thúc, nên thẻ ảnh vĩnh viễn ở trạng thái đang tải.
+Ở Safari còn thêm một tầng nữa: phần mạng chạy trong tiến trình riêng
+(\code{com.apple.WebKit.Networking}), tín hiệu huỷ phải đi qua ranh giới tiến
+trình mới tới được nơi thật sự giữ socket.
+
+Cách có tác dụng trên mọi nhân là gán sang một ảnh GIF 1$\times$1 dạng
+\code{data:}. Đó là một URL hợp lệ và khác hẳn, nên thao tác ``đổi ảnh'' là rõ
+ràng chứ không còn là trường hợp biên; việc huỷ yêu cầu cũ vì thế được thực hiện
+ở mọi trình duyệt, và ảnh mới nằm ngay trong chuỗi nên tải xong tức thì, không
+phát sinh lượt gọi mạng nào.
+
+Lỗi này tốn nhiều thời gian vì môi trường kiểm thử của tôi chạy nhân Chromium,
+nơi \code{src} rỗng hoạt động đúng, nên không tài nào tái hiện được. Cùng một
+thao tác, cùng một đoạn mã, hai nhân trình duyệt cho hai kết quả khác nhau. Chỉ
+khi đếm kết nối ở tầng hệ điều hành và thấy tiến trình
+\code{com.apple.WebKit.Networking} giữ đúng sáu kết nối không bao giờ nhả, trong
+khi trình duyệt kiểm thử lên xuống 3--0--3 bình thường, thì mới khoanh được vùng.
+
+Thứ ba: cho luồng video đi thẳng tới backend thay vì qua proxy của công cụ phát
+triển. Hai lớp trên chỉ thu hồi chỗ khi người xem rời đi, còn hạn mức sáu vẫn
+nguyên đó. Tách luồng sang tên miền khác thì nó dùng hạn mức riêng, sáu chỗ của
+tên miền gọi API được dành trọn cho API --- giao diện không còn báo máy chủ không
+phản hồi nữa.
+
+\subsubsection*{Phần không sửa được bằng mã nguồn}
+
+Ba lớp trên chữa được việc luồng video làm nghẽn lời gọi API, nhưng không chữa
+được bản thân trần sáu kết nối. Phép tính rất đơn giản: ba camera là ba luồng,
+mở hai tab ứng dụng là sáu, vừa đúng trần và không dư chỗ nào. Luồng nào xin sau
+thì đen, và chuyển qua lại giữa hai tab làm thứ tự tranh chỗ đổi liên tục nên lúc
+đen một ô, lúc đen cả ba.
+
+Có một hướng khắc phục đã cân nhắc rồi bỏ: chỉ phát luồng cho những ô đang nằm
+trong tầm nhìn. Hướng này vô dụng ở đây vì trong cả hai tab mọi ô đều đang hiển
+thị. Một hướng khác --- tạm dừng luồng khi tab chạy nền --- thoạt nghe đúng nhưng
+đã phải gỡ bỏ sau khi thử: có môi trường báo trạng thái ``ẩn'' ngay cả khi trang
+đang hiển thị thật, và khi đó camera đen vĩnh viễn không có cách nào hồi lại.
+Bài học là chỉ nên dựa vào tín hiệu quan sát được chắc chắn, và mọi cơ chế cắt
+giảm tài nguyên đều phải hỏng về phía an toàn: mặc định là phát, chỉ dừng khi có
+bằng chứng rõ ràng.
+
+Cách xử lý được chọn là quy ước vận hành --- mỗi lúc chỉ mở ứng dụng ở một tab.
+Muốn bỏ hẳn ràng buộc này thì phải đổi cách lấy hình cho lưới: dùng ảnh làm mới
+định kỳ thay vì giữ kết nối liên tục, mỗi lần lấy ảnh là một yêu cầu ngắn xong
+là trả chỗ ngay, đổi lại lưới chạy khoảng hai hình mỗi giây thay vì mượt như
+luồng thật. Với quy mô một phòng thực tập và ba bốn camera thì quy ước một tab
+đơn giản hơn và không phải đánh đổi gì.
+
+Cần nói rõ một điều về quá trình tìm ra kết luận này. Hai phép đo đầu tiên của
+tôi đều cho kết quả sai và suýt dẫn tới kết luận ngược: lần đầu ``0 kết nối''
+thực ra là do tiến trình backend đã chết trước khi đo, lần sau ``vẫn còn 10 kết
+nối'' là do lệnh dừng tiến trình khách không có tác dụng nên các luồng vẫn đang
+chạy thật. Chỉ khi kiểm tra tình trạng sống của cả hai phía ở từng bước đo thì
+con số mới đáng tin. Bài học là với phép đo trên hệ thống đang chạy, phải xác
+nhận giả định của phép đo trước khi tin vào kết quả của nó.
+
+\subsection{Backend chết đột ngột khi bật luồng Thông minh}
+\label{sub:mps-segfault}
+
+Mỗi lần kích hoạt một pipeline Thông minh, tiến trình backend chết trong khoảng
+một phút, không để lại vết tích trong nhật ký ứng dụng. Vì thời điểm chết trùng
+với lúc nạp 7,3\,GB trọng số lên máy 24\,GB, giả thuyết đầu tiên là hết bộ nhớ.
+Giả thuyết này sai: khi tiến trình chết, hệ thống vẫn còn 9,7\,GB trống.
+
+Báo cáo sự cố của macOS trong \code{\textasciitilde/Library/Logs/DiagnosticReports}
+cho câu trả lời dứt khoát. Tiến trình nhận \code{SIGSEGV} chứ không bị hệ điều
+hành thu hồi vì thiếu bộ nhớ, và ngăn xếp của luồng gây lỗi chỉ đúng một chỗ:
+
+\begin{lstlisting}[caption={Ngăn xếp của luồng gây lỗi, trích từ báo cáo sự cố của macOS}]
+libobjc.A.dylib       objc_msgSend
+CoreFoundation        +[NSDictionary dictionaryWithObjects:forKeys:count:]
+libtorch_cpu.dylib    at::native::min_max_out_mps(...)
+libtorch_cpu.dylib    at::(anonymous namespace)::wrapper_MPS_max_dim(...)
+libtorch_python.dylib torch::autograd::THPVariable_max(...)
+\end{lstlisting}
+
+Hai lần chết ở hai thời điểm khác nhau cho ngăn xếp giống hệt nhau, đủ để loại
+trừ khả năng trùng hợp. Lỗi nằm trong backend MPS của PyTorch: hai luồng cùng
+dựng lệnh Metal thì cấu trúc dữ liệu Objective-C bên dưới bị hỏng và tiến trình
+chết ngay, không sinh ra ngoại lệ Python nào để bắt.
+
+Nguồn gốc là ở kiến trúc đa luồng của hệ thống. Mỗi camera chạy YOLO trong một
+luồng riêng, còn LA-3B chạy trong luồng lọc bất đồng bộ. Mỗi bên đều đã có khoá
+riêng để tự bảo vệ mình, nhưng \emph{hai khoá đó khác nhau}, nên YOLO và LA-3B
+vẫn chạm GPU cùng lúc. Ở chế độ Tiêu chuẩn không bao giờ lộ ra vì chỉ có một mô
+hình; bật Thông minh là điều kiện đủ để lỗi xuất hiện.
+
+Cách khắc phục là đưa toàn bộ thao tác chạm GPU về chung một khoá cấp tiến trình
+(\code{config.inference\_guard()}), áp cho cả suy luận lẫn lúc nạp mô hình --- kể
+cả mô hình dịch tiếng Việt, vốn cũng đẩy trọng số lên Metal. Khoá chỉ có hiệu lực
+khi thiết bị là MPS; trên CUDA và CPU nó là lệnh rỗng nên không ảnh hưởng tốc độ.
+
+Riêng LA-3B dùng hai tầng khoá. Tầng ngoài giữ suốt cả lô để hai lời gọi không
+xen kẽ nhau; tầng trong là khoá dùng chung với YOLO nhưng chỉ giữ trong từng
+chunk nhỏ. Nếu giữ khoá chung suốt cả lô thì mọi camera sẽ đứng hình cho đến khi
+lọc xong, đánh đổi tính đúng đắn lấy một hệ thống không dùng được.
+
+\subsubsection*{Hệ quả: tranh chấp GPU và cách giảm nhẹ}
+
+Sửa xong lỗi sập thì lộ ra vấn đề thứ hai. Khoá làm mọi thao tác GPU xếp hàng,
+mà LA-3B là mô hình ba tỉ tham số nên chiếm phần lớn thời gian: tốc độ của hai
+camera đang chạy YOLO tụt từ 14,1 xuống 1,2--1,4 khung hình mỗi giây trong lúc
+LA-3B làm việc, và hàng đợi chờ phán quyết dâng lên 9.
+
+Đo kỹ thì thấy nguyên nhân không nằm ở khoá mà ở chỗ khác: luồng phụ lấy hàng
+đợi \emph{từng khung cắt một} rồi gọi mô hình với lô kích thước 1, nên tham số
+\code{LA\_BATCH\_SIZE} chưa bao giờ có tác dụng. Mỗi lời gọi là một lần giành
+khoá GPU, và ở cảnh đông người có tới hơn hai trăm lần như vậy trong bốn phút.
+
+Sửa lại cho luồng phụ vét hàng đợi thành lô trước khi hỏi. Bảng dưới so sánh hai
+lần chạy trên cùng ba camera, cột FPS lấy của hai camera có gắn YOLO:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{rcccc}
+\toprule
+& \multicolumn{2}{c}{\textbf{Hỏi lẻ từng khung cắt}}
+& \multicolumn{2}{c}{\textbf{Vét hàng đợi thành lô}} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+\textbf{Thời điểm} & \textbf{FPS} & \textbf{Chờ} & \textbf{FPS} & \textbf{Chờ} \\
+\midrule
+20\,s  & 5,1 / 5,2 & 0 & 3,4 / 3,4 & 1 \\
+60\,s  & 2,9 / 2,6 & 1 & 14,2 / 14,3 & 1 \\
+100\,s & 1,4 / 1,4 & 4 & 7,1 / 7,1 & 1 \\
+120\,s & 1,3 / 1,2 & 9 & 7,1 / 7,3 & 0 \\
+180\,s & 1,4 / 1,4 & 6 & 1,4 & 1 \\
+240\,s & 14,2 / 14,2 & 0 & 1,4 & 1 \\
+300\,s & --- & --- & 10,1 & 0 \\
+\bottomrule
+\end{tabular}
+\caption{Ảnh hưởng của việc gom lô lên tốc độ camera và hàng đợi chờ phán quyết.
+Từ mốc 180\,s trở đi cột FPS ghi giá trị thấp nhất trong các camera có gắn YOLO.}
+\label{tab:la-batching}
+\end{table}
+
+Kết quả không đơn giản như hai phút đầu gợi ý. Trong khoảng 20--120\,s, bản gom
+lô rõ ràng nhanh hơn. Nhưng kéo dài phép đo ra thì cả hai bản đều tụt về khoảng
+1,4 khung hình mỗi giây khi vết mới tiếp tục sinh ra, rồi cùng hồi phục khi cảnh
+vắng người. Nói cách khác, gom lô \emph{không} xoá được tranh chấp GPU: một GPU
+duy nhất không đủ cho một mô hình ba tỉ tham số chạy liên tục song song với hai
+luồng YOLO. Đó là giới hạn phần cứng, không phải khuyết điểm của cách khoá.
+
+Cái mà gom lô thật sự cải thiện là hai chỉ số khác. Hàng đợi chờ phán quyết giữ
+ở mức 0--1 thay vì dâng lên 9, nghĩa là các lượt vượt vạch không bị treo lâu
+trong bộ đệm chờ xác nhận. Và thông lượng tăng khoảng 8\%: 281 khung cắt trong
+300 giây so với 209 khung cắt trong 240 giây.
+
+Cần nói rõ giới hạn của phép đo: hai lần chạy bắt đầu ở hai vị trí khác nhau của
+video nên số vết sinh ra không giống hệt nhau, và mốc thời gian của lần đo thứ
+hai được quy đổi từ hai cửa sổ quan sát nối tiếp. Các con số nên đọc theo xu
+hướng chứ không so từng cặp một.
+
+Điểm chung của cả hai bản, và cũng là kết luận đáng nhớ nhất: khi bộ nhớ đệm
+phán quyết đã đầy và không còn vết mới, tốc độ camera trở lại đúng 14,2 khung
+hình mỗi giây. Chi phí của luồng Thông minh chỉ tồn tại trong lúc còn vết chưa
+được phán, không phải chi phí thường trực. Với bài toán đếm người ra vào ở cổng
+--- nơi lưu lượng theo đợt chứ không liên tục --- đây là đánh đổi chấp nhận được.
+
+Bài học rút ra: khi tiến trình chết không để lại vết trong nhật ký ứng dụng, báo
+cáo sự cố ở tầng hệ điều hành thường là nguồn thông tin duy nhất đáng tin. Suy
+đoán từ hoàn cảnh --- ở đây là ``nạp mô hình lớn nên chắc hết bộ nhớ'' --- dẫn
+sai hướng hoàn toàn.
+
+\section{Hạn chế và hướng phát triển}
+\label{sec:hanche}
+
+\textbf{Hạn chế còn tồn tại:}
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item Luồng Tiêu chuẩn chỉ nhận diện được các lớp có sẵn trong bộ dữ liệu COCO.
+        Muốn phát hiện mũ bảo hộ, áo phản quang hay sản phẩm lỗi thì phải gán nhãn
+        và huấn luyện riêng.
+  \item \textbf{Lọc thuộc tính bằng LA-3B chưa đủ tin cậy.} Số liệu ở
+        Bảng~\ref{tab:la3b} cho thấy truy vấn \code{person with backpack} giữ cả
+        hai khung cắt trong khi đáng lẽ phải lọc bớt. Nguyên nhân nằm ở chỗ mỗi
+        khung cắt chỉ chứa một người ở độ phân giải thấp và không có ngữ cảnh xung
+        quanh, nên mô hình khó khẳng định chắc chắn. Tăng \code{LA\_VOTES} lên 3 để
+        lấy theo đa số có giúp, đổi lại thời gian tăng gấp ba.
+  \item Câu lệnh phải gõ có dấu. Không dấu thì bộ dịch hiểu sai hoàn toàn.
+  \item Mỗi camera chỉ chạy được một pipeline tại một thời điểm.
+  \item Chưa có phân quyền người dùng; ai truy cập được giao diện đều có toàn
+        quyền.
+  \item Bố trí camera nhìn từ trên xuống làm giảm rõ rệt chất lượng phát hiện.
+        Góc nghiêng cho kết quả tốt hơn nhiều.
+  \item Kết quả đếm phụ thuộc mạnh vào vị trí vạch, như số liệu ở
+        Bảng~\ref{tab:anchor} cho thấy. Hệ thống chưa tự gợi ý vị trí tối ưu.
+\end{itemize}
+
+\textbf{Hướng phát triển tiếp theo:}
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item Tự động đề xuất vị trí vạch bằng cách chạy thử vài trăm khung hình đầu,
+        đo hướng di chuyển chính rồi đặt vạch vuông góc với luồng người.
+  \item Bổ sung vùng đa giác bên cạnh vạch thẳng, phục vụ bài toán giám sát khu
+        vực hạn chế.
+  \item Gửi cảnh báo ra Telegram hoặc thư điện tử kèm ảnh chụp.
+  \item Đánh chỉ mục khung hình bằng mô hình nhúng ảnh--văn bản để tìm kiếm theo
+        mô tả ngoại hình thay vì chỉ theo siêu dữ liệu sự kiện.
+  \item Bổ sung đăng nhập và phân quyền theo vai trò.
+\end{itemize}
