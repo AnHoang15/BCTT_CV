@@ -11,8 +11,9 @@ import type {
   Summary, TaskCatalog, TaskType, TimelineData, ZonePoint,
 } from './types';
 
-const BASE = '/api';
-
+// const BASE = '/api';
+const API_ORIGIN = import.meta.env.VITE_API_URL ?? "";
+const BASE = `${API_ORIGIN}/api`;
 /**
  * Thời gian chờ tối đa cho một lời gọi API.
  *
