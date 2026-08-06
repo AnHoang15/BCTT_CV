@@ -22,35 +22,39 @@
 @layer components {
   /* ── Thẻ ────────────────────────────────────────────────────────────── */
   .card {
-    @apply bg-white border border-slate-100 rounded-2xl overflow-hidden;
+    @apply bg-white border border-slate-200/80 rounded-2xl overflow-hidden
+           shadow-sm transition-shadow hover:shadow-md;
   }
 
   .card-head {
-    @apply bg-slate-900 px-4 py-3 text-white flex items-center justify-between;
+    @apply bg-gradient-to-r from-slate-50 to-white px-4 py-3 flex items-center
+           justify-between border-b border-slate-200/60;
   }
 
   .card-head-title {
-    @apply text-base font-bold tracking-tight;
+    @apply text-sm font-semibold tracking-tight text-slate-700;
   }
 
   /* ── Nút ────────────────────────────────────────────────────────────── */
   .btn {
     @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2
-           text-sm font-bold transition-colors cursor-pointer
+           text-sm font-semibold transition-all cursor-pointer
            disabled:cursor-not-allowed disabled:opacity-40;
   }
 
   .btn-primary {
-    @apply btn bg-emerald-600 text-white hover:bg-emerald-700;
+    @apply btn bg-emerald-600 text-white hover:bg-emerald-700
+           shadow-sm shadow-emerald-600/20 hover:shadow-md hover:shadow-emerald-600/25;
   }
 
   .btn-ghost {
     @apply btn border border-slate-200 bg-white text-slate-600 hover:bg-slate-50
-           hover:border-slate-300;
+           hover:border-slate-300 hover:shadow-sm;
   }
 
   .btn-danger {
-    @apply btn border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100;
+    @apply btn border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100
+           hover:shadow-sm;
   }
 
   /* Nút đặt trên nền tối (dải tiêu đề thẻ, lớp phủ trên video) */
@@ -61,17 +65,18 @@
   /* ── Biểu mẫu ───────────────────────────────────────────────────────── */
   .input {
     @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm
-           outline-none transition-colors
-           focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500;
+           outline-none transition-all
+           focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20
+           focus:shadow-sm;
   }
 
   .label {
-    @apply mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500;
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500;
   }
 
   /* ── Nhãn trạng thái ────────────────────────────────────────────────── */
   .badge {
-    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold;
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold;
   }
 
   .badge-on {
@@ -89,7 +94,7 @@
   /* Nhãn nổi trên nền tối, dùng cho lớp phủ trên khung hình */
   .chip-dark {
     @apply inline-flex items-center gap-1.5 rounded-md bg-slate-900/80 px-2.5 py-1
-           text-xs font-bold text-white;
+           text-xs font-semibold text-white backdrop-blur-sm;
   }
 }
 
@@ -99,8 +104,28 @@
   height: 6px;
 }
 .scroll-thin::-webkit-scrollbar-thumb {
-  @apply rounded-full bg-slate-300;
+  @apply rounded-full bg-slate-300 transition-colors;
+}
+.scroll-thin::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400;
 }
 .scroll-thin::-webkit-scrollbar-track {
   @apply bg-transparent;
+}
+
+/* Skeleton loading animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  @apply rounded-lg bg-gradient-to-r from-slate-100 via-slate-200 to-slate-100;
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Toast slide-in */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
 }

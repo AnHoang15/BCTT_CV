@@ -37,6 +37,8 @@
 \setlength{\parskip}{0.3em}
 
 % ── Gói hỗ trợ ───────────────────────────────────────────────────────────────
+\usepackage{amsmath}
+\usepackage{amssymb}
 \usepackage{graphicx}
 \usepackage{float}
 \usepackage{booktabs}
@@ -50,7 +52,32 @@
 \usepackage{titlesec}
 \usepackage{caption}
 \usepackage{listings}
+
+% Sơ đồ vẽ thẳng bằng TikZ thay vì chèn ảnh sinh từ PlantUML hay dbdiagram: chữ trong
+% sơ đồ dùng chung phông và cỡ với phần còn lại của báo cáo, phóng to không vỡ nét, và
+% không phụ thuộc công cụ ngoài để dựng lại.
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds, calc, shapes.multipart}
+
 \usepackage[hidelinks]{hyperref}
+
+% ── Kiểu dùng chung cho các sơ đồ ────────────────────────────────────────────
+\definecolor{sdNen}{HTML}{EEF3F9}
+\definecolor{sdVien}{HTML}{1F3A5F}
+\definecolor{sdNhan}{HTML}{2F6F4E}
+\tikzset{
+  hop/.style      = {draw=sdVien, fill=sdNen, rounded corners=2pt, line width=0.5pt,
+                     inner sep=5pt, align=center, font=\footnotesize},
+  hopnhan/.style  = {hop, fill=sdNhan!12, draw=sdNhan},
+  bang/.style     = {draw=sdVien, fill=white, rounded corners=2pt, line width=0.5pt,
+                     inner sep=0pt, align=left, font=\scriptsize,
+                     rectangle split, rectangle split parts=2,
+                     rectangle split part fill={sdVien!15, white}},
+  mui/.style      = {-{Stealth[length=4pt]}, draw=sdVien, line width=0.5pt},
+  muimo/.style    = {mui, dashed},
+  nhanmui/.style  = {font=\scriptsize\itshape, inner sep=1.5pt, fill=white},
+  khoi/.style     = {draw=sdVien!40, dashed, rounded corners=3pt, inner sep=8pt},
+}
 
 % ── Trích dẫn ────────────────────────────────────────────────────────────────
 % Dùng biblatex + biber. Nếu muốn dùng BibTeX truyền thống, thay bằng

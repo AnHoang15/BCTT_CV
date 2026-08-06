@@ -24,22 +24,24 @@ import type {
 } from '../types';
 import ScheduleEditor, { DEFAULT_SCHEDULE } from './ScheduleEditor';
 import ShapeDrawer from './ShapeDrawer';
-import { EmptyState, ErrorBanner, Spinner, StatusDot, StreamImage } from './common';
+import { EmptyState, ErrorBanner, SkeletonCard, StatusDot, StreamImage, useToast } from './common';
 
 /** Khung bọc một nhóm tham số, để bước cấu hình không thành một dải trôi liền mạch. */
 function ParamBox({
   title, hint, children,
 }: {
-  title: string; hint?: string; children: React.ReactNode;
+  title?: string; hint?: string; children: React.ReactNode;
 }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-3">
-      <div className="mb-2">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">
-          {title}
-        </h3>
-        {hint && <p className="mt-0.5 text-xs text-slate-400">{hint}</p>}
-      </div>
+      {title && (
+        <div className="mb-2">
+          <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">
+            {title}
+          </h3>
+          {hint && <p className="mt-0.5 text-xs text-slate-400">{hint}</p>}
+        </div>
+      )}
       {children}
     </section>
   );
@@ -51,12 +53,22 @@ function ParamBox({
 // cân nhắc cùng lúc — nhìn khung hình rồi mới quyết định đếm kiểu gì.
 const STEPS = ['Camera', 'Bài toán', 'Luồng & hình vẽ', 'Kiểm tra'];
 
+/**
+ * Ngưỡng tin cậy mặc định, phải khớp `YOLO_CONF` trong `backend/app/config.py`.
+ *
+ * Lệch nhau thì pipeline tạo qua giao diện chạy một ngưỡng, pipeline tạo qua API chạy
+ * ngưỡng khác, mà không có gì báo. Trước đây giá trị này bị chép cứng ở hai chỗ trong
+ * tệp, nên đổi một chỗ là lệch ngay.
+ */
+const NGUONG_TIN_CAY_MAC_DINH = 0.25;
+
 interface Props {
   cameras: Camera[];
   onChanged: () => void;
 }
 
 export default function PipelineBuilder({ cameras, onChanged }: Props) {
+  const { toast } = useToast();
   const [catalog, setCatalog] = useState<TaskCatalog | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
@@ -81,7 +93,15 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
   const [zones, setZones] = useState<Record<string, ZonePoint[]>>({});
   // Kiểu hình vẽ tách riêng khỏi bài toán: người dùng chọn "Đếm đối tượng" ở bước 2,
   // rồi kiểu hình ở bước 3 mới quyết định là đếm qua vạch hay đếm trong vùng.
-  const [shape, setShape] = useState<'line' | 'polygon'>('line');
+  const [shape, _setShape] = useState<'line' | 'polygon'>('line');
+  /** Đổi kiểu hình và xoá dữ liệu hình kia để không gửi lên backend shape thừa. */
+  const setShape = (next: 'line' | 'polygon') => {
+    if (next !== shape) {
+      if (next === 'polygon') setLines({});
+      else setZones({});
+    }
+    _setShape(next);
+  };
   const [flip, setFlip] = useState(false);
   const [name, setName] = useState('');
   const [selectedPipeline, setSelectedPipeline] = useState<string | null>(null);
@@ -94,7 +114,9 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
   const [autoReset, setAutoReset] = useState<AutoReset>('never');
   const [speedPreset, setSpeedPreset] = useState('balanced');
   const [targetFps, setTargetFps] = useState(15);
-  const [conf, setConf] = useState(0.25);
+  // Phải khớp YOLO_CONF trong backend/app/config.py. Giá trị 0,35 đo được trên nhãn
+  // chuẩn MOT17: loại bớt hộp yếu ở xa nên bám vết đỡ nhiễu, mất ít lượt đếm giả hơn.
+  const [conf, setConf] = useState(NGUONG_TIN_CAY_MAC_DINH);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [schedule, setSchedule] = useState<ScheduleSpec>(DEFAULT_SCHEDULE);
 
@@ -139,6 +161,12 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
     }, 500);
     return () => window.clearTimeout(timer);
   }, [prompt, mode]);
+
+  // Luồng Thông minh không có ô chọn đối tượng; giữ sẵn lớp "người" để backend
+  // không từ chối vì thiếu lớp.
+  useEffect(() => {
+    if (mode === 'smart') setClasses((current) => (current.length ? current : ['person']));
+  }, [mode]);
 
   /** Các camera đã chọn, theo đúng thứ tự hiển thị trong danh sách. */
   const selectedCameras = useMemo(
@@ -244,7 +272,7 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
     setMaxCount(pipeline.max_count ? String(pipeline.max_count) : '');
     setAutoReset(pipeline.auto_reset);
     setTargetFps(pipeline.target_fps ?? 15);
-    setConf(pipeline.conf ?? 0.25);
+    setConf(pipeline.conf ?? NGUONG_TIN_CAY_MAC_DINH);
     setSchedule(pipeline.schedule ?? DEFAULT_SCHEDULE);
     // Tô sáng đúng thẻ tốc độ nếu tham số khớp một preset, không thì để trống — thà
     // không tô còn hơn tô nhầm khiến người dùng tưởng đang dùng preset đó.
@@ -285,9 +313,9 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
         schedule: schedule.enabled ? schedule : null,
       };
       const shapeOf = (cameraId: string) => ({
-        line: shape === 'line' && lines[cameraId] ? lines[cameraId]! : undefined,
-        zone: shape === 'polygon' ? zones[cameraId] ?? [] : undefined,
-      });
+        line: shape === 'line' && lines[cameraId] ? lines[cameraId]! : null,
+        zone: shape === 'polygon' ? zones[cameraId] ?? [] : null,
+      } as { line?: LineSpec | null; zone?: ZonePoint[] | null });
 
       if (editingId) {
         const cameraId = cameraIds[0];
@@ -320,23 +348,31 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
       exitWizard();
       await load();
       onChanged();
+      const count = editingId ? 1 : selectedCameras.length;
+      toast(
+        `${editingId ? 'Đã cập nhật' : `Đã tạo ${count} pipeline`}${startNow ? ' và bắt đầu chạy' : ''}`,
+      );
     } catch (err) {
       const what = editingId ? 'Không lưu được thay đổi' : 'Không tạo được pipeline';
-      setError(err instanceof Error ? `${what}: ${err.message}` : what);
+      const msg = err instanceof Error ? `${what}: ${err.message}` : what;
+      setError(msg);
+      toast(msg, 'error');
     } finally {
       setBusy(false);
     }
   };
 
-  const runAction = async (action: () => Promise<unknown>) => {
+  const runAction = async (action: () => Promise<unknown>, successMsg: string) => {
     setBusy(true);
     setError(null);
     try {
       await action();
       await load();
       onChanged();
+      toast(successMsg);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Thao tác không thành công');
+      toast(err instanceof Error ? err.message : 'Thao tác không thành công', 'error');
     } finally {
       setBusy(false);
     }
@@ -352,7 +388,7 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
       />
     );
   }
-  if (!catalog) return <Spinner label="Đang tải danh mục bài toán…" />;
+  if (!catalog) return <SkeletonCard className="mt-4" />;
 
   const smartMode = catalog.modes.find((m) => m.id === 'smart');
 
@@ -362,7 +398,7 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
       <div className="w-full space-y-3">
         <header className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-black tracking-tight text-slate-800">
+            <h1 className="text-xl font-bold tracking-tight text-slate-800">
               {editingId ? 'Sửa pipeline' : 'Tạo pipeline mới'}
             </h1>
             <p className="text-sm text-slate-500">
@@ -387,7 +423,7 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
                 <li key={title} className="flex flex-1 items-center gap-1.5">
                   <div
                     className={`flex h-6 w-6 shrink-0 items-center justify-center
-                                rounded-full text-[11px] font-black ${
+                                rounded-full text-xs font-bold ${
                       current ? 'bg-emerald-600 text-white'
                         : done ? 'bg-emerald-100 text-emerald-700'
                         : 'bg-slate-100 text-slate-400'
@@ -396,7 +432,7 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
                     {done ? <Check size={11} /> : index + 1}
                   </div>
                   <span
-                    className={`hidden truncate text-[11px] font-bold lg:block ${
+                    className={`hidden truncate text-xs font-semibold lg:block ${
                       current ? 'text-emerald-700' : 'text-slate-400'
                     } ${skipped ? 'line-through opacity-40' : ''}`}
                   >
@@ -516,7 +552,7 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
 
           {/* Bước 2 — bài toán */}
           {step === 1 && (
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2">
               {catalog.tasks.map((item) => (
                 <button
                   key={item.id}
@@ -539,9 +575,9 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
 
           {/* Bước 3 — luồng, đối tượng và vẽ hình trên cùng một màn */}
           {step === 2 && (
-            <div className="grid gap-6 lg:grid-cols-2">
-              {/* Hai cột chia đôi đều nhau: bên trái chọn luồng và đối tượng, bên
-                  phải vẽ hình. */}
+            <div className="grid gap-6 md:grid-cols-[1fr_1.15fr] md:items-start">
+              {/* Cột trái: luồng và đối tượng. Cột phải có hình vẽ dính ở đầu màn
+                  để lúc kéo xuống sửa tham số vẫn thấy hình đang vẽ. */}
               <div className="space-y-4">
               <ParamBox title="Luồng xử lý">
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -566,9 +602,6 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
                       </p>
                       <p className="mt-1 text-xs leading-snug text-slate-600">
                         {item.description}
-                      </p>
-                      <p className="mt-1 text-xs leading-snug text-slate-400">
-                        {item.hint}
                       </p>
                     </button>
                   ))}
@@ -604,7 +637,7 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
                         key={example}
                         onClick={() => setPrompt(example)}
                         className="cursor-pointer rounded-full border border-slate-200
-                                   px-2 py-0.5 text-[11px] font-medium text-slate-500
+                                   px-2 py-0.5 text-xs font-medium text-slate-500
                                    hover:border-emerald-300 hover:text-emerald-700"
                       >
                         {example}
@@ -613,24 +646,28 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
                   </div>
 
                   {preview && (
-                    <div className="mt-2 rounded-lg border border-emerald-100
-                                    bg-emerald-50/70 px-3 py-2 text-xs leading-relaxed">
-                      <p className="flex items-center gap-1.5 font-bold text-emerald-800">
-                        <Wand2 size={11} /> Hệ thống hiểu câu lệnh này là:
-                      </p>
-                      <p className="text-slate-600">
-                        Chỉ đếm <b className="text-slate-800">{preview.filter_text}</b>
-                        {' · '}<b className="text-slate-800">{preview.direction_label}</b>
-                      </p>
-                      <p className="text-slate-500">{preview.note}</p>
+                    <div className="mt-2 flex items-center gap-1.5 rounded-lg border
+                                    border-emerald-100 bg-emerald-50/70 px-3 py-2 text-xs
+                                    text-emerald-800">
+                      <Wand2 size={11} className="shrink-0" />
+                      <span>
+                        Chỉ đếm <b>{preview.filter_text}</b> · {preview.direction_label}
+                      </span>
                     </div>
                   )}
                 </div>
               )}
 
-              <ParamBox title="Tham số đếm">
+              {/* Luồng Thông minh không dùng tham số đếm: đối tượng được mô tả bằng
+                  câu lệnh ở trên, không chọn lớp. */}
+              {mode !== 'smart' && (
+              <ParamBox>
                 <span className="label">Đối tượng cần theo dõi</span>
-                <div className="flex flex-wrap gap-1.5">
+                <p className="mb-1.5 text-xs text-slate-400">
+                  Đã chọn <b className="text-emerald-700">{classes.length}</b>/
+                  {catalog.classes.length} đối tượng
+                </p>
+                <div className="flex max-h-[9.5rem] flex-wrap gap-1.5 overflow-y-auto pr-1">
                   {catalog.classes.map((option) => {
                     const active = classes.includes(option.id);
                     return (
@@ -723,6 +760,7 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
               </div>
               )}
               </ParamBox>
+              )}
 
               <ScheduleEditor value={schedule} onChange={setSchedule} />
 
@@ -732,27 +770,28 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
                     <button
                       key={item.id}
                       onClick={() => applyPreset(item.id)}
-                      className={`relative cursor-pointer rounded-lg border p-2.5
-                                  text-left transition-colors ${
+                      className={`w-full cursor-pointer rounded-lg border p-3.5 text-left
+                                  transition-colors ${
                         speedPreset === item.id
                           ? 'border-emerald-500 bg-emerald-50'
                           : 'border-slate-200 hover:border-slate-300'
                       }`}
                     >
-                      {item.recommended && (
-                        <span className="absolute -top-2 right-2 rounded-full
-                                         bg-emerald-600 px-1.5 py-0.5 text-[10px]
-                                         font-bold text-white">
-                          Đề xuất
-                        </span>
-                      )}
-                      <p className="text-xs font-bold text-slate-800">{item.name}</p>
-                      <p className="mt-0.5 text-[11px] leading-snug text-slate-500">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-slate-800">{item.name}</p>
+                        {item.recommended && (
+                          <span className="shrink-0 rounded-full bg-emerald-600 px-1.5
+                                           py-0.5 text-[10px] font-semibold text-white">
+                            Đề xuất
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-xs leading-snug text-slate-500">
                         {item.description}
                       </p>
-                      <ul className="mt-1 space-y-0.5">
+                      <ul className="mt-1.5 space-y-0.5">
                         {item.bullets.map((bullet) => (
-                          <li key={bullet} className="text-[11px] text-slate-400">
+                          <li key={bullet} className="text-xs text-slate-400">
                             · {bullet}
                           </li>
                         ))}
@@ -819,7 +858,7 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
                           {Math.round(conf * 100)}%
                         </span>
                       </div>
-                      <div className="flex justify-between text-[11px] text-slate-400">
+                      <div className="flex justify-between text-xs text-slate-400">
                         <span>Bắt nhiều, dễ nhầm</span>
                         <span>Bắt ít, chắc chắn</span>
                       </div>
@@ -832,18 +871,21 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
                           <option key={item.id} value={item.id}>{item.name}</option>
                         ))}
                       </select>
-                      <p className="mt-1 text-[11px] text-slate-400">
-                        Hiện hệ thống chỉ hỗ trợ một thuật toán bám đuổi.
-                      </p>
                     </div>
                   </div>
                 )}
               </ParamBox>
               </div>
 
-              {/* Cột phải: khung vẽ, chiếm hết chiều ngang còn lại */}
+              {/* Cột phải: bỏ sticky để khung vẽ ngang hàng với box cột trái ở mọi
+                  vị trí cuộn. */}
               <div>
-                <span className="label">Vẽ trên khung hình</span>
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="mb-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                      Vẽ trên khung hình
+                    </h3>
+                  </div>
 
                 {/* Chọn nhiều camera thì vẽ lần lượt từng cái. Chấm cạnh tên cho biết
                     camera nào đã có hình, camera nào còn thiếu. */}
@@ -905,6 +947,7 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
                     toàn bộ khung hình.
                   </div>
                 )}
+                </div>
               </div>
             </div>
           )}
@@ -964,7 +1007,7 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
                   placeholder={`${taskDef?.name ?? ''} — ${selectedCameras[0]?.name ?? ''}`}
                 />
                 {selectedCameras.length > 1 && (
-                  <p className="mt-1 text-[11px] text-slate-500">
+                  <p className="mt-1 text-xs text-slate-500">
                     Tên camera được ghép vào sau để {selectedCameras.length} pipeline
                     không trùng tên nhau.
                   </p>
@@ -1085,7 +1128,7 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
     <div className="space-y-3">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-base font-black tracking-tight text-slate-800">Cấu hình AI</h1>
+          <h1 className="text-xl font-bold tracking-tight text-slate-800">Cấu hình AI</h1>
           <p className="text-xs text-slate-500">
             {pipelines.length} pipeline · {pipelines.filter((p) => p.running).length} đang chạy
           </p>
@@ -1113,12 +1156,12 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
                   <tr>
-                    <th className="px-3 py-2 font-bold uppercase tracking-wide">Tên</th>
-                    <th className="px-3 py-2 font-bold uppercase tracking-wide">Camera</th>
-                    <th className="px-3 py-2 font-bold uppercase tracking-wide">Bài toán</th>
-                    <th className="px-3 py-2 font-bold uppercase tracking-wide">Chế độ</th>
-                    <th className="px-3 py-2 font-bold uppercase tracking-wide">Trạng thái</th>
-                    <th className="px-3 py-2 text-right font-bold uppercase tracking-wide">
+                    <th className="px-3 py-2 font-semibold uppercase tracking-wide">Tên</th>
+                    <th className="px-3 py-2 font-semibold uppercase tracking-wide">Camera</th>
+                    <th className="px-3 py-2 font-semibold uppercase tracking-wide">Bài toán</th>
+                    <th className="px-3 py-2 font-semibold uppercase tracking-wide">Chế độ</th>
+                    <th className="px-3 py-2 font-semibold uppercase tracking-wide">Trạng thái</th>
+                    <th className="px-3 py-2 text-right font-semibold uppercase tracking-wide">
                       Thao tác
                     </th>
                   </tr>
@@ -1132,10 +1175,19 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
                       selected={selectedPipeline === pipeline.id}
                       busy={busy}
                       onSelect={() => setSelectedPipeline(pipeline.id)}
-                      onStart={() => runAction(() => api.startPipeline(pipeline.id))}
-                      onStop={() => runAction(() => api.stopPipeline(pipeline.id))}
+                      onStart={() => runAction(
+                        () => api.startPipeline(pipeline.id),
+                        `Đã chạy pipeline "${pipeline.name}"`,
+                      )}
+                      onStop={() => runAction(
+                        () => api.stopPipeline(pipeline.id),
+                        `Đã dừng pipeline "${pipeline.name}"`,
+                      )}
                       onEdit={() => startEdit(pipeline)}
-                      onDelete={() => runAction(() => api.deletePipeline(pipeline.id))}
+                      onDelete={() => runAction(
+                        () => api.deletePipeline(pipeline.id),
+                        `Đã xoá pipeline "${pipeline.name}"`,
+                      )}
                     />
                   ))}
                 </tbody>
@@ -1252,22 +1304,22 @@ function PipelineRow({
         <div className="flex justify-end gap-1">
           {pipeline.running ? (
             <button onClick={onStop} disabled={busy}
-                    className="btn-ghost !px-2 !py-0.5 !text-[11px]">
+                    className="btn-ghost !px-2 !py-0.5 !text-xs">
               <Square size={10} /> Dừng
             </button>
           ) : (
             <button onClick={onStart} disabled={busy}
-                    className="btn-primary !px-2 !py-0.5 !text-[11px]">
+                    className="btn-primary !px-2 !py-0.5 !text-xs">
               <Play size={10} /> Chạy
             </button>
           )}
           <button onClick={onEdit} disabled={busy}
-                  className="btn-ghost !px-2 !py-0.5 !text-[11px]"
+                  className="btn-ghost !px-2 !py-0.5 !text-xs"
                   title="Sửa cấu hình pipeline">
             <Pencil size={10} /> Sửa
           </button>
           <button onClick={onDelete} disabled={busy}
-                  className="btn-danger !px-2 !py-0.5 !text-[11px]" title="Xoá pipeline">
+                  className="btn-danger !px-2 !py-0.5 !text-xs" title="Xoá pipeline">
             <Trash2 size={10} />
           </button>
         </div>

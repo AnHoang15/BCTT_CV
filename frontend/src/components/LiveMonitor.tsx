@@ -20,6 +20,7 @@ import type { AppEvent, Camera } from '../types';
 import CameraDialog from './CameraDialog';
 import {
   EmptyState, ErrorBanner, Lightbox, StatusDot, StreamImage, formatTimestamp,
+  ConfirmDialog, useToast,
 } from './common';
 
 type GridSize = 1 | 4 | 9;
@@ -30,6 +31,7 @@ interface Props {
 }
 
 export default function LiveMonitor({ cameras, onChanged }: Props) {
+  const { toast } = useToast();
   const [grid, setGrid] = useState<GridSize>(4);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [events, setEvents] = useState<AppEvent[]>([]);
@@ -37,6 +39,9 @@ export default function LiveMonitor({ cameras, onChanged }: Props) {
   /** Cảnh báo đang xem ảnh phóng to; null là không mở. */
   const [lightbox, setLightbox] = useState<AppEvent | null>(null);
   const [adding, setAdding] = useState(false);
+  /** Camera đang chờ xác nhận xoá; null là không mở hộp thoại. */
+  const [deleting, setDeleting] = useState<Camera | null>(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
   // Đổi giá trị này để buộc thẻ <img> mở lại kết nối MJPEG.
   const [streamNonce, setStreamNonce] = useState(() => Date.now());
 
@@ -126,23 +131,26 @@ export default function LiveMonitor({ cameras, onChanged }: Props) {
       await api.toggleCamera(camera.id);
       setStreamNonce(Date.now());
       onChanged();
+      toast(camera.enabled ? `Đã tắt camera "${camera.name}"` : `Đã bật camera "${camera.name}"`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không bật/tắt được camera');
+      toast(err instanceof Error ? err.message : 'Không bật/tắt được camera', 'error');
     }
   };
 
   const handleDelete = async (camera: Camera) => {
-    const confirmed = window.confirm(
-      `Xoá camera "${camera.name}"?\n\n` +
-      'Toàn bộ pipeline, đoạn ghi hình và sự kiện của camera này cũng bị xoá vĩnh viễn.',
-    );
-    if (!confirmed) return;
+    setDeletingBusy(true);
     try {
       await api.deleteCamera(camera.id);
       if (expanded === camera.id) setExpanded(null);
       onChanged();
+      toast(`Đã xoá camera "${camera.name}" và toàn bộ dữ liệu liên quan`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không xoá được camera');
+      toast(err instanceof Error ? err.message : 'Không xoá được camera', 'error');
+    } finally {
+      setDeletingBusy(false);
+      setDeleting(null);
     }
   };
 
@@ -150,7 +158,7 @@ export default function LiveMonitor({ cameras, onChanged }: Props) {
     <div className="flex min-h-0 flex-1 flex-col p-4">
       <header className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-black tracking-tight text-slate-800">
+          <h1 className="text-xl font-bold tracking-tight text-slate-800">
             {expandedCamera ? expandedCamera.name : 'Giám sát trực tiếp'}
           </h1>
           <p className="text-sm text-slate-500">
@@ -307,7 +315,7 @@ export default function LiveMonitor({ cameras, onChanged }: Props) {
                   expanded={expanded === camera.id}
                   onExpand={() => setExpanded(expanded === camera.id ? null : camera.id)}
                   onToggle={() => handleToggle(camera)}
-                  onDelete={() => handleDelete(camera)}
+                  onDelete={() => setDeleting(camera)}
                 />
               ))}
             </div>
@@ -323,7 +331,7 @@ export default function LiveMonitor({ cameras, onChanged }: Props) {
                 className={`badge ${
                   events.some((e) => e.status === 'new')
                     ? 'bg-rose-600 text-white'
-                    : 'bg-slate-700 text-slate-300'
+                    : 'bg-slate-100 text-slate-500'
                 }`}
               >
                 {events.filter((e) => e.status === 'new').length} mới
@@ -354,6 +362,17 @@ export default function LiveMonitor({ cameras, onChanged }: Props) {
 
       {adding && (
         <CameraDialog onClose={() => setAdding(false)} onCreated={onChanged} />
+      )}
+
+      {deleting && (
+        <ConfirmDialog
+          title={`Xoá camera "${deleting.name}"?`}
+          message="Toàn bộ pipeline, đoạn ghi hình và sự kiện của camera này cũng bị xoá vĩnh viễn. Thao tác này không thể hoàn tác."
+          confirmLabel="Xoá vĩnh viễn"
+          busy={deletingBusy}
+          onConfirm={() => handleDelete(deleting)}
+          onCancel={() => !deletingBusy && setDeleting(null)}
+        />
       )}
 
       {lightbox && (
@@ -455,8 +474,8 @@ function CameraTile({
                 key={pipeline.id}
                 onClick={() => setViewing(pipeline.id)}
                 title={`Xem kết quả của: ${pipeline.name}`}
-                className={`max-w-[11rem] truncate rounded-full px-2 py-0.5 text-[11px]
-                            font-bold transition-colors ${
+                className={`max-w-[11rem] truncate rounded-full px-2 py-0.5 text-xs
+                            font-semibold transition-colors ${
                   pipeline.id === active?.id
                     ? 'bg-emerald-600 text-white'
                     : 'bg-slate-950/70 text-slate-200 hover:bg-slate-950/90'
@@ -567,7 +586,7 @@ function EventRow({
         </button>
       ) : (
         <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-lg
-                        bg-slate-100 text-[10px] text-slate-400">
+                        bg-slate-100 text-xs text-slate-400">
           không có ảnh
         </div>
       )}

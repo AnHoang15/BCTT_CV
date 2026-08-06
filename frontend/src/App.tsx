@@ -5,7 +5,7 @@ import type { Camera, Summary } from './types';
 import LiveMonitor from './components/LiveMonitor';
 import PipelineBuilder from './components/PipelineBuilder';
 import Playback from './components/Playback';
-import { ErrorBanner } from './components/common';
+import { ErrorBanner, SkeletonGrid } from './components/common';
 
 type Page = 'monitor' | 'builder' | 'playback';
 
@@ -60,10 +60,10 @@ export default function App() {
             <Eye size={22} />
           </div>
           <div className="hidden sm:block">
-            <h1 className="text-xl font-black leading-tight tracking-tight text-slate-800">
+            <h1 className="text-xl font-bold leading-tight tracking-tight text-slate-800">
               VisionOS
             </h1>
-            <p className="text-[11px] leading-tight text-slate-400">
+            <p className="text-xs leading-tight text-slate-400">
               Giám sát camera thông minh
             </p>
           </div>
@@ -75,8 +75,8 @@ export default function App() {
               key={item.id}
               onClick={() => setPage(item.id)}
               title={item.label}
-              className={`flex h-full cursor-pointer items-center gap-2 border-b-[3px]
-                          px-5 text-[15px] font-bold transition-all ${
+                          className={`flex h-full cursor-pointer items-center gap-2 border-b-[3px]
+                          px-5 text-sm font-semibold transition-all ${
                 page === item.id
                   ? 'border-emerald-600 bg-emerald-50/60 text-emerald-700'
                   : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800'
@@ -86,7 +86,7 @@ export default function App() {
               <span className="hidden md:inline">{item.label}</span>
               {item.id === 'monitor' && !!summary?.unread_events && (
                 <span className="ml-1 rounded-full bg-rose-600 px-1.5 py-0.5
-                                 text-[11px] font-bold text-white">
+                                 text-xs font-semibold text-white">
                   {summary.unread_events}
                 </span>
               )}
@@ -101,7 +101,7 @@ export default function App() {
                             bg-slate-200 text-slate-600">
               <User size={15} />
             </div>
-            <span className="hidden text-sm font-bold text-slate-700 sm:inline">admin</span>
+            <span className="hidden text-sm font-semibold text-slate-700 sm:inline">admin</span>
           </div>
         </div>
       </header>
@@ -118,6 +118,12 @@ export default function App() {
               {/* Không nối thêm gợi ý ở đây: `api.ts` đã nói rõ backend chưa chạy hay
                   không phản hồi, nối nữa thành hai câu trùng ý trong cùng một dòng. */}
               <ErrorBanner message={error} onRetry={refresh} />
+            </div>
+          )}
+
+          {!ready && (
+            <div className="p-4 lg:p-6">
+              <SkeletonGrid count={4} />
             </div>
           )}
 

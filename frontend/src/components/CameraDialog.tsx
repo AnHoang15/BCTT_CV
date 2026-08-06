@@ -79,11 +79,11 @@ export default function CameraDialog({ onClose, onCreated }: Props) {
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-md overflow-hidden rounded-xl bg-white"
+        className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-2xl shadow-slate-950/20"
       >
         <div className="card-head !py-2.5">
           <span className="card-head-title">Khai báo camera mới</span>
-          <button onClick={onClose} className="btn-dark !px-2 !py-0.5">
+          <button onClick={onClose} className="btn-ghost !px-2 !py-0.5">
             <X size={12} />
           </button>
         </div>

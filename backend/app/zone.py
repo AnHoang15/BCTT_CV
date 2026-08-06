@@ -21,6 +21,7 @@ class PolygonZoneCounter:
     """Theo dõi số đối tượng bên trong một vùng đa giác."""
 
     def __init__(self, points, anchor: str = "foot", debounce: int = 3,
+                 count_labels: set[str] | None = None,
                  max_age: int = 300, count_initial: bool = False) -> None:
         self.polygon = np.array(points, dtype=np.int32).reshape(-1, 1, 2)
         self.anchor = anchor
@@ -39,6 +40,9 @@ class PolygonZoneCounter:
 
         self.total_entered = 0
         self.current = 0
+        # Lớp nào được cộng vào số đếm; None là đếm tất cả. Vùng vẫn ghi nhận
+        # mọi lớp để về sau tra cứu lại được.
+        self.count_labels = set(count_labels) if count_labels else None
         self.last_events: list[dict] = []
 
     # ── nội bộ ───────────────────────────────────────────────────────────────
@@ -84,13 +88,15 @@ class PolygonZoneCounter:
                 if raw and tid not in self.entered:
                     self.entered.add(tid)
                     if self.count_initial:
-                        self.total_entered += 1
+                        nhan = (labels[index] if labels is not None
+                                and index < len(labels) else "person")
+                        duoc_dem = (self.count_labels is None
+                                    or nhan in self.count_labels)
+                        if duoc_dem:
+                            self.total_entered += 1
                         self.last_events.append({
-                            "track_id": tid,
-                            "direction": "in",
-                            "label": (labels[index] if labels is not None
-                                      and index < len(labels) else "person"),
-                            "box": boxes[index].tolist(),
+                            "track_id": tid, "direction": "in", "label": nhan,
+                            "counted": duoc_dem, "box": boxes[index].tolist(),
                         })
             else:
                 if self.cand.get(tid) == raw:
@@ -104,17 +110,22 @@ class PolygonZoneCounter:
                     self.cand_cnt[tid] = 0
                     if raw and tid not in self.entered:
                         self.entered.add(tid)
-                        self.total_entered += 1
+                        nhan = (labels[index] if labels is not None
+                                and index < len(labels) else "person")
+                        duoc_dem = (self.count_labels is None
+                                    or nhan in self.count_labels)
+                        if duoc_dem:
+                            self.total_entered += 1
                         self.last_events.append({
-                            "track_id": tid,
-                            "direction": "in",
-                            "label": (labels[index] if labels is not None
-                                      and index < len(labels) else "person"),
-                            "box": boxes[index].tolist(),
+                            "track_id": tid, "direction": "in", "label": nhan,
+                            "counted": duoc_dem, "box": boxes[index].tolist(),
                         })
 
             if self.inside.get(tid):
-                current_count += 1
+                nhan = (labels[index] if labels is not None
+                        and index < len(labels) else "person")
+                if self.count_labels is None or nhan in self.count_labels:
+                    current_count += 1
 
         self.current = current_count
         return self.last_events

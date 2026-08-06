@@ -147,7 +147,7 @@ export const getTaskCatalog = () => request<TaskCatalog>('/pipelines/tasks');
 export const createPipeline = (payload: {
   name: string; camera_id: string; task: TaskType; classes: string[];
   mode?: PipelineMode; prompt?: string | null;
-  line?: LineSpec; zone?: ZonePoint[]; flip?: boolean; conf?: number | null;
+  line?: LineSpec | null; zone?: ZonePoint[] | null; flip?: boolean; conf?: number | null;
   direction?: CountDirection; max_count?: number | null;
   auto_reset?: AutoReset; target_fps?: number | null;
   schedule?: ScheduleSpec | null;
@@ -191,8 +191,18 @@ export const updateEvent = (id: string, payload: { status?: string; note?: strin
 export const eventSnapshotUrl = (id: string, width?: number) =>
   `${BASE}/events/${id}/snapshot${width ? `?w=${width}` : ''}`;
 
-export const searchEvents = (q: string) =>
-  request<SearchResult>(`/search?q=${encodeURIComponent(q)}`);
+/**
+ * Tìm sự kiện bằng câu tiếng Việt.
+ *
+ * `cameraId` là camera đang chọn ở đầu trang. Phải gửi kèm, nếu không thì chọn camera
+ * này mà kết quả lại hiện sự kiện của camera khác — ô chọn ngay phía trên vẫn ghi tên
+ * camera đã chọn nên người dùng không hiểu vì sao.
+ */
+export const searchEvents = (q: string, cameraId?: string | null) => {
+  const query = new URLSearchParams({ q });
+  if (cameraId) query.set('camera_id', cameraId);
+  return request<SearchResult>(`/search?${query.toString()}`);
+};
 
 export const getCounts = (params: { pipeline_id?: string; camera_id?: string; hours?: number }) => {
   const query = new URLSearchParams();
@@ -215,6 +225,15 @@ export const getRecordedDates = (cameraId: string) =>
 
 export const segmentVideoUrl = (segmentId: string) =>
   `${BASE}/playback/segments/${segmentId}/video`;
+
+/**
+ * Địa chỉ tải đoạn ghi hình về máy, kèm hộp giới hạn và vạch đếm đã vẽ sẵn.
+ *
+ * Khác `segmentVideoUrl` ở chỗ backend gắn `Content-Disposition` nên trình duyệt lưu
+ * thành tệp thay vì mở trong tab, và tên tệp đặt theo camera kèm mốc thời gian.
+ */
+export const segmentDownloadUrl = (segmentId: string) =>
+  `${BASE}/playback/segments/${segmentId}/download`;
 
 export const findSegmentAt = (cameraId: string, ts: string) =>
   request<{ segment: { id: string; start_ts: string; duration: number }; seek_seconds: number }>(

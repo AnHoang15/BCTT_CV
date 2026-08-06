@@ -14,13 +14,55 @@ như một máy chủ HTTP; phần giao diện là ứng dụng React chạy tro
 chỉ giao tiếp với máy chủ qua REST API cùng luồng MJPEG. Cách chia này cho phép
 thay giao diện mà không đụng tới phần xử lý, và ngược lại.
 
-% TODO: Sinh ảnh từ mã PlantUML bên dưới, lưu vào figures/kien_truc.png
 \begin{figure}[H]
 \centering
-% \includegraphics[width=\textwidth]{figures/kien_truc.png}
-\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering\todo{Chèn sơ đồ kiến trúc.
-Sinh ảnh từ mã PlantUML ở Phụ lục~\ref{app:plantuml} rồi lưu vào
-\code{figures/kien\_truc.png}}}}
+\begin{tikzpicture}[node distance=6mm]
+
+% ── Nguồn ──
+\node[hop] (rtsp)  {Camera IP\\\scriptsize RTSP};
+\node[hop, below=of rtsp] (usb) {Webcam\\\scriptsize USB};
+\node[hop, below=of usb]  (tep) {Tệp video\\\scriptsize MP4};
+\begin{scope}[on background layer]
+  \node[khoi, fit=(rtsp)(usb)(tep), label={[font=\scriptsize\bfseries]above:Nguồn video}] (gNguon) {};
+\end{scope}
+
+% ── Luồng xử lý mỗi camera ──
+\node[hopnhan, right=16mm of usb] (worker) {\textbf{CameraWorker}\\\scriptsize một luồng mỗi camera};
+\node[hop, right=10mm of worker, yshift=13mm] (yolo)  {YOLOv8n\\\scriptsize phát hiện};
+\node[hop, below=5mm of yolo]                 (track) {ByteTrack\\\scriptsize bám vết};
+\node[hop, below=5mm of track]                (dem)   {Bộ đếm\\\scriptsize vạch / vùng};
+\node[hop, below=5mm of dem]                  (la3b)  {LA-3B\\\scriptsize lọc thuộc tính};
+\begin{scope}[on background layer]
+  \node[khoi, fit=(yolo)(track)(dem)(la3b),
+        label={[font=\scriptsize\bfseries]above:Xử lý ảnh}] (gXuLy) {};
+\end{scope}
+
+% ── Đầu ra ──
+\node[hop, right=14mm of yolo]  (dem_buf) {Bộ đệm khung hình\\\scriptsize khung mới nhất};
+\node[hop, below=8mm of dem_buf] (ghi)    {Ghi hình\\\scriptsize đoạn 60 giây};
+\node[hop, below=8mm of ghi]     (csdl)   {SQLite (WAL)\\\scriptsize sự kiện, số đếm};
+
+% ── Tầng phục vụ ──
+\node[hopnhan, right=14mm of ghi] (api) {\textbf{FastAPI}\\\scriptsize 38 điểm cuối};
+\node[hop, above=8mm of api] (mjpeg) {Luồng MJPEG\\\scriptsize \code{multipart}};
+\node[hop, below=8mm of api] (react) {Giao diện React\\\scriptsize trình duyệt};
+
+\draw[mui] (rtsp.east)  -- (worker.west);
+\draw[mui] (usb.east)   -- (worker.west);
+\draw[mui] (tep.east)   -- (worker.west);
+\draw[mui] (worker) -- node[nhanmui, above, sloped] {khung hình} (yolo);
+\draw[mui] (yolo)  -- (track);
+\draw[mui] (track) -- (dem);
+\draw[muimo] (track) -- node[nhanmui, right] {luồng TM} (la3b);
+\draw[mui] (yolo.east)  -- node[nhanmui, above] {đã vẽ} (dem_buf.west);
+\draw[mui] (dem.east)   -- (ghi.west);
+\draw[mui] (dem.east)   -- (csdl.west);
+\draw[mui] (dem_buf.east) -| (mjpeg.north);
+\draw[mui] (csdl.east)  -- (api.west);
+\draw[mui] (ghi.east)   -- (api.west);
+\draw[mui] (mjpeg.south) -- (api.north);
+\draw[mui] (api) -- node[nhanmui, right] {JSON} (react);
+\end{tikzpicture}
 \caption{Kiến trúc hệ thống. Mỗi camera chiếm một luồng xử lý riêng, kết quả đẩy
 vào bộ đệm khung hình để tầng HTTP đọc mà không phải chờ.}
 \label{fig:kientruc}
@@ -31,6 +73,81 @@ hình, phát hiện đối tượng, bám vết, kiểm tra vượt vạch, vẽ
 quả vào bộ đệm. Tầng HTTP không bao giờ gọi trực tiếp vào camera mà chỉ đọc ảnh
 JPEG mới nhất trong bộ đệm đó. Một camera bị treo hay mất mạng vì thế không làm
 đứng cả API.
+
+\section{Luồng hoạt động đầu--cuối}
+\label{sec:luonghoatdong}
+
+Các mục sau mô tả từng thành phần một cách độc lập. Mục này đi theo chiều ngược lại:
+bám theo \emph{một khung hình} từ lúc rời khỏi camera đến lúc người dùng nhìn thấy kết
+quả, để thấy các thành phần nối vào nhau ở đâu.
+
+\subsection{Chín bước của một khung hình}
+
+\begin{enumerate}[leftmargin=*, itemsep=3pt]
+  \item \textbf{Đọc.} Luồng riêng của camera gọi \code{cap.read()}. Nguồn là tệp thì
+        hết video sẽ phát lại từ đầu và đặt lại số đếm; nguồn là mạng thì mất tín hiệu
+        sẽ chuyển sang vòng thử lại có giãn cách tăng dần từ 3 đến 60 giây.
+
+  \item \textbf{Phát hiện.} Khung hình đưa qua YOLOv8n \emph{đúng một lần}, dù camera
+        đang chạy bao nhiêu pipeline. Tham số truyền vào là hợp của mọi lớp đối tượng
+        và ngưỡng tin cậy thấp nhất trong số các pipeline — chi tiết ở
+        Mục~\ref{sec:chungphathien}.
+
+  \item \textbf{Bám vết.} Mỗi pipeline lọc lại tập hộp theo lớp và ngưỡng của riêng nó,
+        rồi đưa qua bộ ByteTrack \emph{riêng}. Mã định danh vết phải độc lập vì hai
+        pipeline đếm hai vạch khác nhau không được chia nhau trạng thái bám.
+
+  \item \textbf{Lọc thuộc tính} (chỉ luồng Thông minh). Các hộp chưa từng được phán
+        quyết bị cắt ra, xếp hàng đưa sang LA-3B chạy trên luồng nền. Kết quả lưu vào
+        bộ nhớ đệm theo mã vết nên mỗi vết chỉ tốn một lần hỏi.
+
+  \item \textbf{Đếm.} Điểm neo bàn chân của từng vết được làm mượt qua mười khung, đối
+        chiếu với vạch hoặc vùng. Vượt ra ngoài dải đệm và giữ nguyên phía mới trong ba
+        khung liên tiếp thì tính một lượt.
+
+  \item \textbf{Ghi nhận.} Lượt vượt vạch sinh một bản ghi trong bảng \code{events} kèm
+        ảnh chụp thời điểm đó. Số đếm dồn được đẩy định kỳ vào bảng \code{counts} chứ
+        không ghi mỗi khung, tránh làm phình cơ sở dữ liệu.
+
+  \item \textbf{Vẽ chú thích.} Hộp giới hạn, vạch, mũi tên chiều và bảng số được vẽ lên
+        một \emph{bản sao} của khung hình. Bản gốc vẫn giữ nguyên vì màn cấu hình cần
+        khung hình sạch để người dùng vẽ vạch mới.
+
+  \item \textbf{Ghi hình.} Khung đã vẽ chú thích được ghi vào tệp MP4 của đoạn 60 giây
+        đang mở. Hết đoạn thì đóng tệp, mở đoạn mới và ghi bản ghi vào \code{segments}.
+
+  \item \textbf{Phát ra ngoài.} Khung đã vẽ được đặt vào bộ đệm một ô. Tầng HTTP đọc từ
+        đó và đẩy sang trình duyệt dưới dạng MJPEG.
+\end{enumerate}
+
+\subsection{Vì sao dùng bộ đệm một ô}
+
+Bước 9 là chỗ dễ mắc lỗi nhất trong toàn bộ chuỗi. Nếu tầng HTTP đọc thẳng từ camera
+thì tốc độ xử lý bị buộc vào tốc độ của trình duyệt chậm nhất đang xem — mở thêm một
+tab là số đếm chậm lại theo.
+
+Bộ đệm một ô cắt đứt ràng buộc đó: luồng camera luôn \emph{ghi đè} khung mới nhất mà
+không chờ ai, còn tầng HTTP luôn đọc được khung mới nhất mà không chặn ai. Trình duyệt
+chậm chỉ nhận được ít khung hơn, chứ không làm chậm việc đếm.
+
+Đánh đổi là trình duyệt có thể bỏ qua vài khung hình. Với việc theo dõi trực tiếp thì
+điều đó không quan trọng — số đếm và sự kiện vẫn tính trên toàn bộ khung hình, chỉ phần
+hiển thị bị thưa đi.
+
+\subsection{Hai đường đọc dữ liệu}
+
+Người dùng lấy dữ liệu ra theo hai đường tách biệt, không đường nào đi qua luồng
+camera:
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item \textbf{Trực tiếp} --- trình duyệt mở kết nối MJPEG tới điểm cuối
+        \code{/cameras/\{id\}/stream}, giữ mở liên tục và nhận từng khung.
+  \item \textbf{Xem lại} --- trình duyệt gọi các điểm cuối JSON để lấy dòng thời gian
+        và danh sách sự kiện, rồi tải đoạn video MP4 qua HTTP có hỗ trợ \code{Range}.
+\end{itemize}
+
+Tách rời như vậy có nghĩa là dừng toàn bộ camera thì trang Xem lại vẫn hoạt động bình
+thường trên dữ liệu đã ghi.
 
 \section{Thu nhận và quản lý luồng video}
 \label{sec:thunhan}
@@ -86,6 +203,70 @@ Ngưỡng IoU của NMS đặt ở 0{,}5 thay vì giá trị thấp hơn thườ
 hai người đứng sát nhau tạo ra hai hộp chồng lấn khá nhiều; ngưỡng quá gắt sẽ gộp
 họ thành một.
 
+\subsection{Dùng chung một lần phát hiện cho nhiều pipeline}
+\label{sec:chungphathien}
+
+Khi một camera chạy nhiều pipeline, cách làm hiển nhiên là mỗi pipeline tự gọi YOLO
+trên khung hình của mình. Cách đó sai về chi phí: bốn pipeline trên một camera thành
+bốn lần suy luận cho \emph{cùng một khung hình}, trong khi bản thân phép suy luận không
+phụ thuộc gì vào cấu hình của pipeline.
+
+Điều then chốt là YOLO tính toàn bộ 80 lớp COCO trong một lần lan truyền xuôi; tham số
+\code{classes} chỉ lọc ở đầu ra chứ không làm mạng chạy nhẹ đi. Đo được: phát hiện sáu
+lớp chỉ tốn hơn phát hiện một lớp \textbf{2{,}5\%} thời gian. Nói cách khác, thông tin
+mà pipeline thứ hai cần đã nằm sẵn trong kết quả của pipeline thứ nhất.
+
+Vì vậy phép phát hiện được tách khỏi phép bám vết:
+
+\begin{lstlisting}[language=Python, caption={Tách phát hiện khỏi bám vết, trích từ \code{app/detector.py}}]
+def detect(frame, class_ids, conf):
+    """Một lần gọi YOLO cho cả camera, dùng chung cho mọi pipeline."""
+    with config.inference_guard():
+        result = model(frame, classes=class_ids or None, conf=conf,
+                       imgsz=config.YOLO_IMGSZ, verbose=False)[0]
+    return filter_min_size(apply_nms(sv.Detections.from_ultralytics(result)))
+
+class Detector:
+    def track(self, detections):
+        """Mỗi pipeline lọc lại theo lớp và ngưỡng của riêng nó, rồi tự bám vết."""
+\end{lstlisting}
+
+Luồng camera gọi \code{detect()} một lần với \textbf{hợp} các lớp và ngưỡng tin cậy
+\textbf{thấp nhất} của mọi pipeline đang chạy, rồi mỗi pipeline gọi \code{track()} để
+lọc lại theo cấu hình riêng. Lấy hợp và ngưỡng thấp nhất là bắt buộc: thiếu một lớp
+hoặc đặt ngưỡng cao hơn của pipeline nào đó thì pipeline ấy mất dữ liệu đầu vào.
+
+Thay đổi này được kiểm chứng là \emph{không làm đổi kết quả}: chạy đối chứng 160 khung
+hình với 4828 hộp giới hạn, bản cũ và bản mới cho ra kết quả giống hệt nhau ở từng hộp.
+Đây là điều bắt buộc phải chứng minh khi tái cấu trúc phần tính toán --- nhanh hơn mà
+đổi kết quả thì không còn là tái cấu trúc nữa.
+
+\subsection{Nối tiếp các lần suy luận trên GPU dùng chung}
+\label{sec:khoagpu}
+
+Mỗi camera một luồng, mà tất cả dùng chung một thiết bị tính toán. Trên nền Metal của
+Apple, thư viện PyTorch \emph{không an toàn khi gọi từ nhiều luồng} --- hai luồng cùng
+gọi suy luận làm tiến trình chết ngay lập tức, không để lại vết trong nhật ký ứng dụng.
+Sự cố này và cách truy nguyên được thuật lại ở Mục~\ref{sec:loi-sigsegv}.
+
+Cách khắc phục là một khoá bao quanh mọi lần suy luận, chỉ bật khi thiết bị là Metal:
+
+\begin{lstlisting}[language=Python, caption={Nối tiếp suy luận, trích từ \code{app/config.py}}]
+@contextlib.contextmanager
+def inference_guard():
+    """Nối tiếp các lần suy luận dùng chung một GPU Metal."""
+    if device() == "mps":
+        with _INFERENCE_LOCK:
+            yield
+    else:
+        yield
+\end{lstlisting}
+
+Khoá này làm các camera phải xếp hàng chờ nhau, nên tốc độ mỗi camera giảm khi số camera
+tăng. Nhưng đó là giới hạn của phần cứng chứ không phải của thiết kế: một GPU chỉ tính
+được một việc tại một thời điểm, khoá chỉ làm việc xếp hàng trở nên tường minh và an
+toàn thay vì ngầm định và gây sập.
+
 \subsection{Hiệu chỉnh tham số ByteTrack}
 \label{sec:bytetrack}
 
@@ -100,9 +281,8 @@ Giá trị $0{,}9$ (tương ứng $\text{IoU} \geq 0{,}1$) khiến vết sống 
 Đi kèm là \code{lost\_track\_buffer} đặt ở 50 khung hình để giữ vết qua các đoạn
 bị che khuất ngắn.
 
-\todo{Chạy lại thực nghiệm trên video của bạn với hai giá trị ngưỡng khác nhau,
-ghi lại số mã định danh sinh ra và độ dài vết trung vị, rồi điền vào
-Bảng~\ref{tab:bytetrack} ở Chương~\ref{ch:ketqua}.}
+Số liệu thực nghiệm cho năm giá trị ngưỡng nằm ở Bảng~\ref{tab:bytetrack},
+Chương~\ref{ch:ketqua}.
 
 \section{Thuật toán đếm qua vạch}
 \label{sec:dem}
@@ -139,13 +319,20 @@ def _anchor_pt(self, box):
 \end{lstlisting}
 
 \textbf{Vùng đệm và độ trễ xác nhận.} Quanh vạch có một dải đệm rộng bằng 3\% chiều
-dài vạch. Đối tượng nằm trong dải này chưa được coi là đã sang phía bên kia. Khi
-vượt ra ngoài dải, phía mới còn phải giữ nguyên trong ít nhất ba khung hình liên
-tiếp thì mới tính là một lượt. Hai cơ chế này cùng chặn các dao động nhỏ quanh
-vạch.
+cao hộp giới hạn của chính đối tượng đang xét. Đối tượng nằm trong dải này chưa
+được coi là đã sang phía bên kia. Khi vượt ra ngoài dải, phía mới còn phải giữ
+nguyên trong ít nhất ba khung hình liên tiếp thì mới tính là một lượt. Hai cơ chế
+này cùng chặn các dao động nhỏ quanh vạch.
 
 Vị trí dùng để xét không phải toạ độ tức thời mà là trung bình trượt của mười
 khung hình gần nhất, giúp làm mượt thêm một lần nữa.
+
+Đơn vị của dải đệm là chiều cao đối tượng chứ không phải chiều dài vạch. Cách chọn
+đơn vị này là kết quả của một lỗi phải sửa về sau, trình bày ở
+Mục~\ref{sec:loi-vungdem}: lấy theo chiều dài vạch thì cùng một lượt đi qua lại
+được đếm hay bị bỏ tuỳ vào việc người dùng kéo vạch dài hay ngắn, điều không có
+căn cứ vật lý nào. Lấy theo chiều cao đối tượng thì thang đo tự khớp với phối
+cảnh: người ở xa hộp nhỏ nên dải đệm hẹp, người ở gần hộp to nên dải đệm rộng.
 
 \textbf{Nối lại vết theo không gian.} Khi một mã định danh mới xuất hiện, thuật
 toán tìm trong số các mã vừa biến mất gần đây xem có mã nào ở vị trí đủ gần
@@ -521,12 +708,34 @@ Lược đồ gồm bảy bảng: \code{cameras}, \code{pipelines}, \code{events
 \code{counts}, \code{segments}, \code{logs} và \code{settings}. Chi tiết từng cột
 xem Phụ lục~\ref{app:schema}.
 
-% TODO: Sinh sơ đồ quan hệ từ mã DBML ở Phụ lục, lưu vào figures/csdl.png
 \begin{figure}[H]
 \centering
-% \includegraphics[width=0.85\textwidth]{figures/csdl.png}
-\fbox{\parbox[c][4.5cm][c]{0.85\textwidth}{\centering\todo{Chèn sơ đồ quan hệ CSDL.
-Sinh từ mã DBML ở Phụ lục~\ref{app:dbml}}}}
+\begin{tikzpicture}[node distance=9mm]
+
+\node[bang] (cameras) {\textbf{cameras}
+  \nodepart{two}\ \code{id} PK\\\ name, location\\\ source, kind\\\ enabled\ };
+
+\node[bang, right=22mm of cameras] (pipelines) {\textbf{pipelines}
+  \nodepart{two}\ \code{id} PK\\\ \code{camera\_id} FK\\\ task, mode, classes\\\ line, zone, conf\\\ schedule\ };
+
+\node[bang, below left=12mm and -6mm of pipelines] (events) {\textbf{events}
+  \nodepart{two}\ \code{id} PK\\\ \code{camera\_id} FK\\\ \code{pipeline\_id} FK\\\ ts, kind, label\\\ snapshot\ };
+
+\node[bang, below right=12mm and -6mm of pipelines] (counts) {\textbf{counts}
+  \nodepart{two}\ \code{id} PK\\\ \code{pipeline\_id} FK\\\ ts, in, out\\\ occupancy\ };
+
+\node[bang, below=26mm of cameras] (segments) {\textbf{segments}
+  \nodepart{two}\ \code{id} PK\\\ \code{camera\_id} FK\\\ start\_ts, end\_ts\\\ path, duration\ };
+
+\node[bang, right=16mm of counts] (settings) {\textbf{settings}
+  \nodepart{two}\ \code{key} PK\\\ value\ };
+
+\draw[mui] (cameras.east)  -- node[nhanmui, above] {1..n} (pipelines.west);
+\draw[mui] (cameras.south) -- node[nhanmui, left]  {1..n} (segments.north);
+\draw[mui] (pipelines.south) -- (events.north);
+\draw[mui] (pipelines.south) -- (counts.north);
+\draw[mui] (cameras.south east) -- (events.north west);
+\end{tikzpicture}
 \caption{Lược đồ cơ sở dữ liệu. Xoá một camera sẽ kéo theo các pipeline gắn với
 nó nhờ ràng buộc khoá ngoại.}
 \label{fig:csdl}

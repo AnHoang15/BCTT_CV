@@ -21,9 +21,32 @@ for _d in (DATA_DIR, SNAPSHOT_DIR, SEGMENT_DIR, EXPORT_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
 # ── Mô hình phát hiện ────────────────────────────────────────────────────────
+# Ba tham số dưới đây đã đo trên nhãn chuẩn MOT17 (`scripts/danh_gia_mot17.py`), và
+# kết quả đi ngược trực giác: phát hiện được nhiều người hơn KHÔNG làm số đếm đúng hơn.
+# Người ở xa, nhỏ, bị che phần lớn không đi qua vạch, nhưng lại làm bộ bám vết phải
+# ghép thêm nhiều hộp yếu, sinh vết vỡ và mã vết trôi — nguồn gốc của lượt đếm giả.
+# Chỉ số cần tối ưu là "thấy đúng người đang bước qua vạch", không phải "thấy được bao
+# nhiêu người trong khung".
+#
+#   trọng số   yolov8n 0,91 · yolo11n 0,91 · yolo12n 0,88 · yolo11s 0,88  (F1 đếm)
+#   imgsz      640 0,86 · 960 0,91 · 1280 0,86 · 1536 0,86
+#   conf       0,25 và 0,35 cho kết quả BẰNG NHAU (F1 gộp 0,81 trên 18 cấu hình)
+#
+# Ba giá trị hiện tại đều là mặc định từ đầu dự án, và cả ba đều đã được kiểm chứng là
+# không có lựa chọn nào tốt hơn rõ rệt.
+#
 # yolov8n = nhẹ nhất, chạy được trên CPU. Đổi sang yolov8s/m/l nếu có GPU.
 YOLO_WEIGHTS = os.getenv("YOLO_WEIGHTS", "yolov8n.pt")
 YOLO_IMGSZ   = int(os.getenv("YOLO_IMGSZ", "960"))
+
+# Từng đổi lên 0,35 rồi trả về 0,25. Một phép đo trung gian cho thấy 0,35 loại được một
+# lượt đếm giả, nhưng phép đo ấy chạy trên đường ống rút gọn (gọi thẳng YOLO + ByteTrack)
+# chứ không qua lớp `Detector` — mà lớp đó còn khử trùng lặp NMS và lọc hộp dưới
+# MIN_BOX_AREA, tức đã loại sẵn phần lớn hộp yếu ở xa. Nâng ngưỡng chỉ lặp lại việc đã
+# làm rồi. Đo lại qua đường ống thật: hai ngưỡng bằng nhau, và ở một vị trí vạch thì
+# 0,35 còn kém hơn (0,93 so với 1,00).
+#
+# Bài học: đo tham số phải chạy đúng đường ống của hệ thống, không phải bản rút gọn.
 YOLO_CONF    = float(os.getenv("YOLO_CONF", "0.25"))
 NMS_IOU      = float(os.getenv("NMS_IOU", "0.5"))
 MIN_BOX_AREA = int(os.getenv("MIN_BOX_AREA", "300"))
@@ -52,6 +75,9 @@ MIN_CONSECUTIVE_FRAMES     = int(os.getenv("MIN_CONSEC", "1"))
 COUNTER_HISTORY      = int(os.getenv("COUNTER_HISTORY", "10"))
 COUNTER_COOLDOWN     = int(os.getenv("COUNTER_COOLDOWN", "20"))
 COUNTER_RELINK_DIST  = int(os.getenv("COUNTER_RELINK_DIST", "80"))
+# Vùng đệm quanh vạch, tính theo chiều cao hộp đối tượng (0.03 = 3% chiều cao người).
+# Không còn tính theo độ dài vạch, và hệ số đã hiệu chỉnh theo các lượt qua vạch xác
+# minh bằng mắt — xem chú thích trong counter.py.
 COUNTER_MARGIN_FRAC  = float(os.getenv("COUNTER_MARGIN", "0.03"))
 COUNTER_DEBOUNCE     = int(os.getenv("COUNTER_DEBOUNCE", "3"))
 
@@ -78,7 +104,12 @@ RECORD_MAX_WIDTH   = int(os.getenv("RECORD_MAX_WIDTH", "854"))
 RECORD_FOURCC      = os.getenv("RECORD_FOURCC", "avc1")
 
 # ── Lưu trữ ──────────────────────────────────────────────────────────────────
-DEFAULT_RETENTION_DAYS = int(os.getenv("RETENTION_DAYS", "7"))
+# Mỗi sự kiện vượt vạch lưu một ảnh chụp đầy đủ cỡ khung hình (có camera 4K ->
+# ~550KB/snapshot) nên đĩa đầy rất nhanh. Giữ lại dữ liệu ngắn (3 ngày) và thu
+# nhỏ ảnh chụp xuống 320px — hai thứ này quyết định gần như toàn bộ dung lượng.
+DEFAULT_RETENTION_DAYS = int(os.getenv("RETENTION_DAYS", "3"))
+# Chiều rộng tối đa (px) của ảnh chụp sự kiện; giữ tỷ lệ khung hình gốc.
+SNAPSHOT_MAX_WIDTH = int(os.getenv("SNAPSHOT_MAX_WIDTH", "320"))
 COUNT_SNAPSHOT_SECONDS = int(os.getenv("COUNT_SNAPSHOT_SECONDS", "60"))
 
 # ── Luồng Thông minh: LocateAnything-3B ──────────────────────────────────────

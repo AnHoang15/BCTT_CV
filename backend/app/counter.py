@@ -41,6 +41,7 @@ class CentroidCrossingCounter:
         debounce: int = 3,
         flip: bool = False,
         directions: str = "both",
+        count_labels: set[str] | None = None,
     ) -> None:
         self.p1 = _as_point(line_start)
         self.p2 = _as_point(line_end)
@@ -53,13 +54,42 @@ class CentroidCrossingCounter:
         self.relink_dist = relink_dist
         self.relink_frames = relink_frames
         self.anchor = anchor
-        self.margin = margin_frac * self.line_len
+        # Vùng đệm tính theo CHIỀU CAO ĐỐI TƯỢNG, không theo độ dài vạch.
+        #
+        # Trước đây `margin = margin_frac * line_len`, và nó sai đơn vị. Vùng đệm sinh
+        # ra để chống hộp giới hạn rung, mà biên độ rung tỉ lệ với kích thước đối tượng
+        # trong ảnh chứ chẳng liên quan gì tới việc người dùng kéo vạch dài hay ngắn.
+        # Đo được trên hai camera thật: cùng một thuật toán, vạch kéo hết khung 4K cho
+        # biên 115px = 10% chiều cao người, còn vạch 1080px cho 32px = 22%. Hệ quả là
+        # vẽ vạch dài hơn thì cùng một lượt đi qua lại không được đếm — người đi vào
+        # cửa hàng vượt vạch 59px bị bỏ vì chưa đạt ngưỡng 115px.
+        #
+        # Lấy theo chiều cao hộp thì thang đo tự khớp với phối cảnh: người ở xa hộp nhỏ
+        # cần biên nhỏ, người ở gần hộp to cần biên to, và kết quả không đổi khi người
+        # dùng vẽ lại vạch dài ngắn khác nhau.
+        #
+        # Hệ số 3% đến từ đối chiếu với các lượt qua vạch đã xác minh bằng mắt trên năm
+        # video mẫu. Mức 12% từng dùng nghe hợp lý nhưng quá rộng: người đứng sát camera
+        # cao 1178px thì biên thành 141px, trong khi cả quãng bước vào cửa hàng chỉ đưa
+        # bàn chân qua vạch được 60px — lượt vào cửa thật bị bỏ. Bằng chứng "đi qua thật"
+        # không nên đến từ việc đi XA vạch, vì quãng đường vuông góc phụ thuộc góc đặt
+        # camera; nó đến từ `history_len` khung làm mượt cộng `debounce` khung ở lại phía
+        # mới. Vùng đệm chỉ cần đủ chặn nhiễu hộp giới hạn.
+        self.margin_frac = margin_frac
+        self.margin_min = 4.0
         self.debounce = max(1, debounce)
         self.flip = flip
         # Câu lệnh có thể chỉ quan tâm một chiều, ví dụ "đếm người đi vào". Lọc ngay
         # tại đây thay vì lọc danh sách sự kiện trả về, nếu không số đếm hiển thị sẽ
         # vẫn cộng cả chiều người dùng không yêu cầu.
         self.directions = directions if directions in ("both", "in", "out") else "both"
+        # Lớp nào được cộng vào bộ đếm. `None` nghĩa là đếm tất cả.
+        #
+        # Camera ghi nhận mọi lớp mô hình nhận ra, vì một lượt suy luận YOLO đã tính
+        # sẵn cả tám mươi lớp rồi — lọc bớt chỉ là vứt kết quả đi chứ không tiết kiệm
+        # được gì (đo được: chênh 2,5%, nằm trong sai số). Nhưng bộ đếm hiển thị thì
+        # phải đúng thứ người dùng yêu cầu, nên hai việc tách riêng.
+        self.count_labels = set(count_labels) if count_labels else None
 
         self.centroids: dict[int, deque] = {}   # tid -> lịch sử điểm neo
         self.sides: dict[int, int] = {}         # tid -> phía đã xác nhận (+1/-1)
@@ -78,6 +108,10 @@ class CentroidCrossingCounter:
         cx = (box[0] + box[2]) / 2
         cy = box[3] if self.anchor == "foot" else (box[1] + box[3]) / 2
         return np.array([cx, cy], dtype=float)
+
+    def _margin_for(self, box) -> float:
+        """Bề rộng vùng đệm cho riêng một đối tượng, theo chiều cao hộp của nó."""
+        return max(self.margin_min, self.margin_frac * float(box[3] - box[1]))
 
     def _signed_distance(self, pt: np.ndarray) -> float:
         """Khoảng cách có dấu từ điểm tới đường thẳng chứa vạch."""
@@ -156,7 +190,8 @@ class CentroidCrossingCounter:
                 continue
 
             # 0 = còn trong vùng đệm, chưa coi là đã sang phía khác.
-            raw = 1 if dist > self.margin else (-1 if dist < -self.margin else 0)
+            margin = self._margin_for(boxes[i])
+            raw = 1 if dist > margin else (-1 if dist < -margin else 0)
             if raw == 0 or raw == self.sides[tid]:
                 self.cand[tid] = self.sides[tid]
                 self.cand_cnt[tid] = 0
@@ -184,18 +219,28 @@ class CentroidCrossingCounter:
             self.sides[tid] = raw
             self.cand_cnt[tid] = 0
 
-            if self.directions != "both" and direction != self.directions:
-                continue
+            label = labels[i] if labels is not None and i < len(labels) else "person"
 
-            if direction == "in":
-                self.in_count += 1
-            else:
-                self.out_count += 1
+            # Ghi nhận mọi lượt cắt vạch, nhưng chỉ cộng vào bộ đếm những lượt khớp
+            # cả lớp đối tượng lẫn chiều mà người dùng chọn.
+            #
+            # Tách hai việc này ra vì chúng vốn là hai câu hỏi khác nhau: "camera thấy
+            # gì" và "tôi muốn đếm gì". Trước đây gộp làm một, nên pipeline đặt "chỉ
+            # đếm vào" thì mọi lượt đi ra bị vứt thẳng — về sau tìm "người đi ra hôm
+            # nay" trên camera đó không ra gì, dù hệ thống đã nhìn thấy đủ cả.
+            dung_chieu = self.directions == "both" or direction == self.directions
+            dung_lop = self.count_labels is None or label in self.count_labels
+            if dung_chieu and dung_lop:
+                if direction == "in":
+                    self.in_count += 1
+                else:
+                    self.out_count += 1
 
             self.last_events.append({
                 "track_id": tid,
                 "direction": direction,
-                "label": labels[i] if labels is not None and i < len(labels) else "person",
+                "label": label,
+                "counted": dung_chieu and dung_lop,
                 "box": boxes[i].tolist(),
             })
 

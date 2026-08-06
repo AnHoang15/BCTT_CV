@@ -1,9 +1,100 @@
 /** Các thành phần giao diện nhỏ dùng lại ở nhiều trang. */
-import { AlertTriangle, Loader2, Play, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Loader2, Play, X, XCircle } from 'lucide-react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import * as api from '../api';
 import type { AppEvent, CameraStatus } from '../types';
+
+/* ── Thông báo nhanh (toast) ─────────────────────────────────────────────
+   Dùng để xác nhận hành động thành công/thất bại mà không cắt ngang thao tác
+   bằng một hộp thoại. Mỗi toast tự biến mất sau vài giây. */
+type ToastTone = 'success' | 'error' | 'info';
+
+interface ToastItem {
+  id: number;
+  tone: ToastTone;
+  message: string;
+}
+
+interface ToastContextValue {
+  toast: (message: string, tone?: ToastTone) => void;
+}
+
+const ToastContext = createContext<ToastContextValue>({ toast: () => undefined });
+
+export function useToast() {
+  return useContext(ToastContext);
+}
+
+const TOAST_STYLES: Record<ToastTone, { icon: ReactNode; classes: string }> = {
+  success: {
+    icon: <CheckCircle2 size={16} />,
+    classes: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+  },
+  error: {
+    icon: <XCircle size={16} />,
+    classes: 'border-rose-200 bg-rose-50 text-rose-800',
+  },
+  info: {
+    icon: <AlertTriangle size={16} />,
+    classes: 'border-sky-200 bg-sky-50 text-sky-800',
+  },
+};
+
+let toastSeq = 0;
+
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const [items, setItems] = useState<ToastItem[]>([]);
+  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+
+  const dismiss = useCallback((id: number) => {
+    const timer = timers.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      timers.current.delete(id);
+    }
+    setItems((current) => current.filter((item) => item.id !== id));
+  }, []);
+
+  const toast = useCallback((message: string, tone: ToastTone = 'success') => {
+    const id = ++toastSeq;
+    setItems((current) => [...current.slice(-4), { id, tone, message }]);
+    timers.current.set(id, setTimeout(() => dismiss(id), 3500));
+  }, [dismiss]);
+
+  return (
+    <ToastContext.Provider value={{ toast }}>
+      {children}
+      {/* Hiển thị ở góc phải trên, phía dưới thanh điều hướng để không che nút thao tác. */}
+      <div className="pointer-events-none fixed right-4 top-[4.5rem] z-[100] flex
+                      w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
+        {items.map((item) => {
+          const style = TOAST_STYLES[item.tone];
+          return (
+            <div
+              key={item.id}
+              role="status"
+              className={`pointer-events-auto flex items-start gap-2 rounded-xl border
+                          px-3 py-2.5 text-sm font-medium shadow-lg shadow-slate-900/10
+                          animate-[toast-in_0.2s_ease-out] ${style.classes}`}
+            >
+              <span className="mt-0.5 shrink-0">{style.icon}</span>
+              <span className="min-w-0 flex-1 break-words">{item.message}</span>
+              <button
+                onClick={() => dismiss(item.id)}
+                className="shrink-0 cursor-pointer rounded p-0.5 opacity-50
+                           transition-opacity hover:opacity-100"
+                aria-label="Đóng thông báo"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </ToastContext.Provider>
+  );
+}
 
 export function StatusDot({ status, dark = false }: { status: CameraStatus; dark?: boolean }) {
   const map: Record<CameraStatus, { dot: string; label: string }> = {
@@ -30,6 +121,27 @@ export function Spinner({ label }: { label?: string }) {
     <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500">
       <Loader2 size={16} className="animate-spin" />
       {label ?? 'Đang tải…'}
+    </div>
+  );
+}
+
+/** Skeleton loading placeholder cho các danh sách và grid. */
+export function SkeletonCard({ className = '' }: { className?: string }) {
+  return (
+    <div className={`rounded-xl border border-slate-200/60 bg-white p-3 shadow-sm ${className}`}>
+      <div className="skeleton mb-3 h-4 w-1/3 rounded" />
+      <div className="skeleton mb-2 h-3 w-2/3 rounded" />
+      <div className="skeleton h-3 w-1/2 rounded" />
+    </div>
+  );
+}
+
+export function SkeletonGrid({ count = 4, className = '' }: { count?: number; className?: string }) {
+  return (
+    <div className={`grid gap-3 ${className}`} style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <SkeletonCard key={i} />
+      ))}
     </div>
   );
 }
@@ -77,9 +189,9 @@ export function Stat({
     rose: 'text-rose-600', amber: 'text-amber-600',
   };
   return (
-    <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className={`mt-0.5 text-xl font-black tabular-nums ${tones[tone]}`}>{value}</p>
+    <div className="rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-2 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className={`mt-0.5 text-xl font-bold tabular-nums ${tones[tone]}`}>{value}</p>
     </div>
   );
 }
@@ -239,13 +351,14 @@ export function Lightbox({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="max-h-full w-full max-w-4xl overflow-hidden rounded-xl bg-white"
+        className="max-h-full w-full max-w-4xl overflow-hidden rounded-xl bg-white
+                   shadow-2xl shadow-slate-950/30"
       >
         <div className="card-head !py-2">
           <span className="card-head-title truncate">
             {event.message ?? event.type} · {formatTimestamp(event.ts)}
           </span>
-          <button onClick={onClose} className="btn-dark !px-2 !py-0.5" title="Đóng">
+          <button onClick={onClose} className="btn-ghost !px-2 !py-0.5" title="Đóng">
             <X size={12} />
           </button>
         </div>
@@ -269,6 +382,58 @@ export function Lightbox({
               <Play size={13} /> Xem đoạn video
             </button>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Hộp thoại xác nhận hành động nguy hiểm.
+ *
+ * Thay cho `window.confirm` — trình duyệt hiện hộp thoại thô, không hợp với phong
+ * cách còn lại của ứng dụng và người dùng dễ bấm nhầm. Nút chính (xoá) luôn tô
+ * đỏ và có thể hiển thị thêm lời giải thích vì sao cần cân nhắc.
+ */
+export function ConfirmDialog({
+  title, message, confirmLabel = 'Xoá', onConfirm, onCancel, busy = false,
+}: {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  busy?: boolean;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+
+  return (
+    <div
+      onClick={onCancel}
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/70 p-4"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm overflow-hidden rounded-xl bg-white shadow-2xl shadow-slate-950/30"
+      >
+        <div className="flex items-center gap-2 border-b border-slate-200/60 px-4 py-3">
+          <AlertTriangle size={16} className="shrink-0 text-rose-600" />
+          <span className="text-sm font-semibold text-slate-800">{title}</span>
+        </div>
+        <p className="px-4 py-3 text-sm leading-relaxed text-slate-600">{message}</p>
+        <div className="flex justify-end gap-2 border-t border-slate-200/60 px-4 py-3">
+          <button onClick={onCancel} disabled={busy} className="btn-ghost">
+            Huỷ
+          </button>
+          <button onClick={onConfirm} disabled={busy} className="btn-danger">
+            {busy ? 'Đang xoá…' : confirmLabel}
+          </button>
         </div>
       </div>
     </div>

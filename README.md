@@ -212,6 +212,7 @@ Hệ thống tự chọn CUDA → MPS → CPU theo thứ tự ưu tiên.
 ## Giới hạn đã biết
 
 - Luồng Tiêu chuẩn chỉ nhận diện được các lớp có trong bộ dữ liệu COCO (người, xe đạp, ô tô, xe máy, xe buýt, xe tải). Mũ bảo hộ hay sản phẩm lỗi cần huấn luyện riêng.
+- **Ghi nhận và đếm là hai việc tách rời.** Camera ghi nhận mọi lớp trong sáu lớp trên, bất kể pipeline cấu hình đếm lớp nào — nhờ vậy tra cứu về sau không phụ thuộc vào việc có đoán đúng nhu cầu từ lúc dựng pipeline hay không. Một lượt suy luận YOLO đã tính sẵn cả tám mươi lớp nên việc này gần như miễn phí: đo được chênh 2,5%, nằm trong sai số. Ô "Đối tượng cần theo dõi" và "Hướng đếm" chỉ quyết định **con số hiển thị**, không quyết định dữ liệu nào được lưu.
 - **Lọc thuộc tính bằng LA-3B còn nhiễu.** Đo trên một khung hình hai người: `person` giữ 2/2, `person in red shirt` giữ 1/2, `person holding umbrella` giữ 1/2, nhưng `person with backpack` cũng giữ 2/2 dù chỉ nên giữ ít hơn. Khung cắt một người ở độ phân giải thấp và thiếu ngữ cảnh là nguyên nhân chính. Camera đặt góc nghiêng cho kết quả tốt hơn hẳn góc nhìn thẳng từ trên xuống.
 - Mô tả nên gõ **có dấu**. Không dấu thì bộ dịch hiểu sai hoàn toàn.
 - Một pipeline gắn với đúng một camera. Chọn nhiều camera lúc tạo thì hệ thống sinh ra mỗi camera một pipeline riêng, số đếm tách bạch — không có kiểu cộng dồn số đếm của nhiều camera vào một chỗ.

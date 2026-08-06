@@ -110,9 +110,14 @@ def _thumbnail(source: Path, width: int) -> Path | None:
 
 
 @router.get("/search")
-def natural_language_search(q: str = Query(..., min_length=1), limit: int = 200):
-    """Tìm sự kiện bằng câu tiếng Việt, ví dụ: 'người đi vào hôm qua buổi sáng'."""
-    return search.search_events(q, limit)
+def natural_language_search(q: str = Query(..., min_length=1), limit: int = 200,
+                            camera_id: str | None = None):
+    """Tìm sự kiện bằng câu tiếng Việt, ví dụ: 'người đi vào hôm qua buổi sáng'.
+
+    `camera_id` là camera đang chọn trên giao diện; câu lệnh có nêu tên camera thì
+    phần trong câu được ưu tiên.
+    """
+    return search.search_events(q, limit, camera_id)
 
 
 @router.get("/counts")

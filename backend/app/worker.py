@@ -76,11 +76,21 @@ class PipelineRuntime:
         self.id = pipeline["id"]
 
         self.classes = json.loads(pipeline.get("classes") or '["person"]')
+        # Luồng Tiêu chuẩn bám vết **mọi** lớp hệ thống hỗ trợ, không chỉ lớp người
+        # dùng chọn đếm. Một lượt suy luận YOLO đã tính sẵn cả tám mươi lớp nên việc
+        # lọc bớt chỉ vứt kết quả đi chứ không tiết kiệm gì — đo được chênh 2,5%,
+        # nằm trong sai số. Nhờ vậy về sau tra cứu được cả những đối tượng chưa ai
+        # nghĩ tới lúc cấu hình, thay vì phải dựng pipeline mới rồi ngồi chờ dữ liệu.
+        #
+        # Luồng Thông minh thì giữ nguyên phạm vi đã chọn: LA-3B lọc theo mô tả của
+        # người dùng, đem cả ô tô xe tải vào hỏi vừa tốn GPU vừa vô nghĩa.
+        smart = pipeline.get("mode") == "smart"
+        self.bam_vet = self.classes if smart else list(config.COCO_CLASSES)
         self.detector = Detector(
-            self.classes,
+            self.bam_vet,
             conf=pipeline.get("conf") or config.YOLO_CONF,
             fps=worker.fps or 30.0,
-            smart=pipeline.get("mode") == "smart",
+            smart=smart,
         )
         self.counter: CentroidCrossingCounter | None = None
         self.zone: PolygonZoneCounter | None = None
@@ -290,6 +300,8 @@ class CameraWorker(threading.Thread):
                 # Ở luồng Thông minh, vết chỉ hiện ra sau khi LA-3B xác nhận, nên lần
                 # đầu nhìn thấy nó trong vùng đã là một lượt vào thật sự.
                 count_initial=pipeline.get("mode") == "smart",
+                # Vùng ghi nhận mọi lớp, chỉ cộng vào số đếm lớp đã chọn.
+                count_labels=set(runtime.classes),
             )
             runtime._last_in = 0
             runtime._last_out = 0
@@ -317,6 +329,8 @@ class CameraWorker(threading.Thread):
             debounce=config.COUNTER_DEBOUNCE,
             flip=bool(pipeline.get("flip")),
             directions=directions,
+            # Vạch ghi nhận mọi lớp, chỉ cộng vào số đếm lớp đã chọn.
+            count_labels=set(runtime.classes),
         )
         runtime._last_in = 0
         runtime._last_out = 0
@@ -616,6 +630,11 @@ class CameraWorker(threading.Thread):
             labels = [l for l, keep in zip(labels, mask) if keep]
             confs = [c for c, keep in zip(confs, mask) if keep]
 
+        # `detections` chỉ giữ lớp người dùng chọn đếm, vì nó nuôi con số "Trong khung"
+        # trên màn hình và ngưỡng cảnh báo vượt số lượng. Camera bám vết cả sáu lớp để
+        # về sau tra cứu được, nhưng nếu để ô tô lọt vào đây thì cảnh báo "quá đông
+        # người" sẽ nổ vì một chiếc xe chạy ngang.
+        chon = set(runtime.classes)
         runtime.detections = [
             {
                 "track_id": track_ids[i],
@@ -624,6 +643,7 @@ class CameraWorker(threading.Thread):
                 "box": [round(float(v)) for v in boxes[i]],
             }
             for i in range(len(track_ids))
+            if labels[i] in chon
         ]
 
         crossings: list[dict] = []
@@ -642,10 +662,19 @@ class CameraWorker(threading.Thread):
             self._record_crossing(event, runtime.frame, pipeline)
 
     def _save_snapshot(self, frame: np.ndarray, suffix: str) -> str | None:
-        """Lưu ảnh chụp kèm sự kiện. Trả về tên tệp, hoặc None nếu ghi thất bại."""
+        """Lưu ảnh chụp kèm sự kiện. Trả về tên tệp, hoặc None nếu ghi thất bại.
+
+        Thu nhỏ về chiều rộng `SNAPSHOT_MAX_WIDTH` trước khi lưu: khung hình gốc từ
+        camera 4K (~2160x3840) tới ~550KB/ảnh, thu về 320px chỉ còn vài chục KB —
+        giảm chục lần dung lượng đĩa mà vẫn đủ chi tiết để xem lại sự kiện.
+        """
         ts = datetime.now()
         name = f"{self.camera_id}_{ts.strftime('%Y%m%d_%H%M%S')}_{suffix}.jpg"
         try:
+            scale = min(1.0, config.SNAPSHOT_MAX_WIDTH / max(1, frame.shape[1]))
+            if scale < 1.0:
+                size = (int(frame.shape[1] * scale), int(frame.shape[0] * scale))
+                frame = cv2.resize(frame, size, interpolation=cv2.INTER_AREA)
             cv2.imwrite(str(config.SNAPSHOT_DIR / name), frame,
                         [cv2.IMWRITE_JPEG_QUALITY, 80])
             return name

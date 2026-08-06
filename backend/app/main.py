@@ -6,12 +6,16 @@ from __future__ import annotations
 
 import threading
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from . import config, db, manager
-from .routers import admin, cameras, events, pipelines, playback
+from .routers import admin, ai, cameras, events, pipelines, playback
+
+_FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
 _retention_timer: threading.Timer | None = None
 
@@ -37,6 +41,7 @@ async def lifespan(app: FastAPI):
     db.connect()
     db.seed_if_empty()
     db.purge_orphans()
+    db.purge_expired()  # dọn ngay lúc khởi động, không chờ chu kỳ 6 giờ
     db.log("Khởi động backend VisionOS", source="system")
     manager.sync_from_db()
     _schedule_retention()
@@ -70,6 +75,7 @@ app.include_router(pipelines.router)
 app.include_router(events.router)
 app.include_router(playback.router)
 app.include_router(admin.router)
+app.include_router(ai.router)
 
 
 @app.get("/api/health", tags=["system"])
@@ -80,3 +86,22 @@ def health():
         "device": config.device(),
         "cameras_running": sum(1 for w in workers.values() if w.is_alive()),
     }
+
+
+# ── Phục vụ frontend đã build ────────────────────────────────────────────────
+if _FRONTEND_DIR.is_dir():
+    app.mount("/assets", StaticFiles(directory=str(_FRONTEND_DIR / "assets")), name="static-assets")
+
+    from fastapi.responses import FileResponse
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        """Catch-all: trả index.html cho mọi route không phải /api.
+
+        Không cho cache index.html (không có header cache), nếu không trình duyệt sẽ
+        giữ bản cũ và tải bundle JS đã cũ sau mỗi lần build frontend.
+        """
+        index = _FRONTEND_DIR / "index.html"
+        if index.exists():
+            return FileResponse(str(index), headers={"Cache-Control": "no-cache"})
+        return {"detail": "Frontend not built"}

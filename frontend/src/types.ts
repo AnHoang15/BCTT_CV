@@ -94,8 +94,8 @@ export interface Pipeline {
   mode: PipelineMode;
   prompt: string | null;
   classes: string[];
-  line: LineSpec;
-  zone: ZonePoint[];
+  line: LineSpec | null;
+  zone: ZonePoint[] | null;
   flip: boolean;
   conf: number | null;
   direction: CountDirection;
@@ -199,6 +199,11 @@ export interface SearchResult {
   };
   total: number;
   results: AppEvent[];
+  /**
+   * Lời giải thích khi không có kết quả, ví dụ chưa pipeline nào theo dõi loại đối
+   * tượng vừa tìm. Chỉ có khi danh sách rỗng và backend biết được lý do.
+   */
+  hint: string | null;
 }
 
 export interface CountsSeries {

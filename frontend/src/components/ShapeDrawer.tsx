@@ -269,7 +269,7 @@ export default function ShapeDrawer({
           <>
             <span
               className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2
-                         rounded bg-emerald-500 px-1.5 py-0.5 text-[11px] font-black text-white"
+                         rounded bg-emerald-500 px-1.5 py-0.5 text-xs font-bold text-white"
               style={{
                 left: `${(midX + normalX * 1.35) * 100}%`,
                 top: `${(midY + normalY * 1.35) * 100}%`,
@@ -279,7 +279,7 @@ export default function ShapeDrawer({
             </span>
             <span
               className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2
-                         rounded bg-rose-500 px-1.5 py-0.5 text-[11px] font-black text-white"
+                         rounded bg-rose-500 px-1.5 py-0.5 text-xs font-bold text-white"
               style={{
                 left: `${(midX - normalX * 1.35) * 100}%`,
                 top: `${(midY - normalY * 1.35) * 100}%`,

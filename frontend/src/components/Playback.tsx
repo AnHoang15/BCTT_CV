@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Calendar, Clock, Film, Play, Search, Sparkles, Video as VideoIcon, X,
+  Calendar, Clock, Download, Film, Play, Search, Sparkles, Video as VideoIcon, X,
 } from 'lucide-react';
 import * as api from '../api';
 import type { AppEvent, Camera, SearchResult, Segment, TimelineData } from '../types';
@@ -100,7 +100,9 @@ export default function Playback({ cameras }: Props) {
     setQueryText(q);
     setSearching(true);
     try {
-      setSearchResult(await api.searchEvents(q));
+      // Gửi kèm camera đang chọn ở đầu trang: không có nó thì kết quả trả về sự
+      // kiện của mọi camera trong khi ô chọn vẫn ghi tên một camera cụ thể.
+      setSearchResult(await api.searchEvents(q, cameraId));
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Tìm kiếm không thành công');
@@ -114,7 +116,7 @@ export default function Playback({ cameras }: Props) {
       <div className="mx-auto max-w-[1500px] space-y-3">
         <header className="flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h1 className="text-base font-black tracking-tight text-slate-800">
+            <h1 className="text-xl font-bold tracking-tight text-slate-800">
               Xem lại &amp; Tìm kiếm
             </h1>
             <p className="text-xs text-slate-500">
@@ -155,7 +157,7 @@ export default function Playback({ cameras }: Props) {
                   setSearchResult(null);
                   setQueryText('');
                 }}
-                className="btn-dark !px-2 !py-0.5"
+                className="btn-ghost !px-2 !py-0.5"
               >
                 <X size={11} /> Xoá bộ lọc
               </button>
@@ -186,7 +188,7 @@ export default function Playback({ cameras }: Props) {
                   key={example}
                   onClick={() => runSearch(example)}
                   className="cursor-pointer rounded-full border border-slate-200 px-2
-                             py-0.5 text-[11px] font-medium text-slate-500
+                             py-0.5 text-xs font-medium text-slate-500
                              hover:border-emerald-300 hover:text-emerald-700"
                 >
                   {example}
@@ -212,7 +214,12 @@ export default function Playback({ cameras }: Props) {
                   <EmptyState
                     icon={<Search size={28} />}
                     title="Không tìm thấy sự kiện nào"
-                    hint="Thử câu khác, hoặc bỏ bớt điều kiện thời gian."
+                    /* Backend giải thích được vì sao rỗng thì hiện đúng lời đó. Câu
+                       gợi ý chung chung khiến người dùng đi sửa câu lệnh, trong khi
+                       vấn đề thật nằm ở chỗ chưa pipeline nào theo dõi loại đối
+                       tượng ấy nên không có gì để tìm. */
+                    hint={searchResult.hint
+                      ?? 'Thử câu khác, hoặc bỏ bớt điều kiện thời gian.'}
                   />
                 ) : (
                   <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3
@@ -268,12 +275,38 @@ export default function Playback({ cameras }: Props) {
                 )}
               </div>
               {activeSegment && (
-                <div className="flex items-center justify-between px-3 py-1.5
+                <div className="flex items-center justify-between gap-3 px-3 py-1.5
                                 text-xs text-slate-500">
                   <span className="flex items-center gap-1.5">
                     <Clock size={11} /> Bắt đầu {activeSegment.clock}
                   </span>
-                  <span>{Math.round(activeSegment.duration)} giây</span>
+                  <span className="flex items-center gap-3">
+                    <span>{Math.round(activeSegment.duration)} giây</span>
+                    {/* Thẻ <a download> chứ không phải fetch: để trình duyệt tự lo
+                        việc tải, hiện thanh tiến trình và ghi vào thư mục Downloads.
+                        Tải qua JavaScript sẽ phải giữ cả tệp trong bộ nhớ trước.
+
+                        Đoạn đang ghi thì khoá nút lại: tệp MP4 chưa có bảng chỉ mục
+                        ở cuối nên tải về cũng không trình phát nào mở được. */}
+                    {activeSegment.end_ts ? (
+                      <a
+                        href={api.segmentDownloadUrl(activeSegment.id)}
+                        download
+                        className="btn-ghost !px-2 !py-0.5 !text-xs"
+                        title="Tải đoạn này về máy, đã vẽ sẵn hộp giới hạn và vạch đếm"
+                      >
+                        <Download size={12} /> Tải về
+                      </a>
+                    ) : (
+                      <span
+                        className="btn-ghost !px-2 !py-0.5 !text-xs opacity-40"
+                        title="Đoạn này đang được ghi, chưa tải về được. Chờ hết đoạn
+                               hoặc chọn một đoạn cũ hơn."
+                      >
+                        <Download size={12} /> Đang ghi
+                      </span>
+                    )}
+                  </span>
                 </div>
               )}
             </div>
@@ -302,7 +335,7 @@ export default function Playback({ cameras }: Props) {
                         disabled={!segment.available}
                         onClick={() => setActiveSegment(segment)}
                         className={`cursor-pointer rounded border px-1.5 py-0.5
-                                    text-[11px] font-bold transition-colors
+                                    text-xs font-semibold transition-colors
                                     disabled:cursor-not-allowed disabled:opacity-40 ${
                           activeSegment?.id === segment.id
                             ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
@@ -391,7 +424,7 @@ function ResultCard({
 
       <span
         className={`pointer-events-none absolute left-1 top-1 rounded px-1 py-0.5
-                    text-[9px] font-black text-white ${
+                    text-[10px] font-bold text-white ${
           isIn ? 'bg-emerald-600' : 'bg-rose-600'
         }`}
       >
@@ -399,11 +432,11 @@ function ResultCard({
       </span>
 
       <div className="bg-white px-1.5 py-1">
-        <p className="truncate text-[11px] font-bold text-slate-700">
+        <p className="truncate text-xs font-semibold text-slate-700">
           {event.clock ?? formatTimestamp(event.ts).split(' ')[1]}
         </p>
         {!compact && (
-          <p className="truncate text-[9px] text-slate-400">{event.camera_name ?? ''}</p>
+          <p className="truncate text-[10px] text-slate-400">{event.camera_name ?? ''}</p>
         )}
       </div>
 
@@ -477,7 +510,7 @@ function Timeline({
         ))}
       </div>
 
-      <div className="mt-0.5 flex justify-between text-[9px] text-slate-400">
+      <div className="mt-0.5 flex justify-between text-[10px] text-slate-400">
         {[0, 4, 8, 12, 16, 20, 24].map((hour) => (
           <span key={hour}>{String(hour).padStart(2, '0')}h</span>
         ))}

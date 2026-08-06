@@ -26,34 +26,56 @@ trị, chạy được trên máy tính cá nhân không cần GPU rời. Mã ng
 \toprule
 \textbf{Thành phần} & \textbf{Nội dung} & \textbf{Số dòng} \\
 \midrule
-\code{backend/app/}  & Engine xử lý ảnh, REST API, truy cập cơ sở dữ liệu & 3.729 \\
-\code{frontend/src/} & Giao diện React, TypeScript & 2.768 \\
-\code{scripts/}      & Script đo thực nghiệm & 197 \\
-\code{report/}       & Mã nguồn LaTeX của báo cáo này & 1.620 \\
+\code{backend/app/}  & Engine xử lý ảnh, REST API, truy cập cơ sở dữ liệu & 4.772 \\
+\code{frontend/src/} & Giao diện React, TypeScript & 4.319 \\
+\code{scripts/}      & Script đo thực nghiệm, kiểm thử và dựng hình minh hoạ & 1.006 \\
+\code{report/}       & Mã nguồn LaTeX của báo cáo này & 2.820 \\
 \midrule
-\multicolumn{2}{@{}l}{\textbf{Tổng cộng}} & \textbf{8.314} \\
+\multicolumn{2}{@{}l}{\textbf{Tổng cộng}} & \textbf{12.917} \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
 Số dòng đếm bằng \code{wc -l}, đã bao gồm chú thích và dòng trống.
 
-Máy chủ cung cấp 31 điểm cuối API, chia thành năm nhóm: camera, pipeline, sự
+Máy chủ cung cấp 38 điểm cuối API, chia thành năm nhóm: camera, pipeline, sự
 kiện, xem lại và quản trị. Tài liệu API tự sinh theo chuẩn OpenAPI, truy cập tại
 \code{/docs}.
+
+Kèm theo mã nguồn là thư mục \code{output/} chứa video kết quả của từng pipeline
+đếm, mỗi tệp đã in sẵn vạch đếm, hộp giới hạn và bảng số Vào/Ra lên khung hình.
+Video sinh bằng \code{scripts/kiem\_thu\_dem.py}; tham số vạch lấy trực tiếp từ
+API nên luôn khớp với cấu hình đang chạy trong hệ thống.
+
+\begin{table}[H]
+\centering
+\caption{Video kết quả bàn giao. Mỗi tệp ứng với một pipeline, không phải một
+video nguồn --- một camera chạy nhiều pipeline thì có nhiều tệp, nên tên tệp kèm
+mã pipeline.}
+\label{tab:videoout}
+\small
+\begin{tabularx}{\textwidth}{@{}Xllc@{}}
+\toprule
+\textbf{Pipeline} & \textbf{Vạch} & \textbf{Nguồn} & \textbf{Vào/Ra} \\
+\midrule
+Đếm người qua cửa hàng           & Ngang, lật & Cửa hàng tiện lợi & 1/0 \\
+Đếm người qua cửa sảnh ga        & Ngang      & Cửa ra vào sảnh ga & 1/5 \\
+Đếm qua vạch --- Cửa tàu điện    & Chéo       & Ga tàu điện ngầm & 6/10 \\
+Đếm qua vạch --- người đeo túi   & Chéo, lật  & Ga tàu điện ngầm & 9/6 \\
+Đếm người mặc áo trắng           & Dọc        & Cổng ra vào & 2/4 \\
+Đếm người qua cổng               & Dọc        & Cổng ra vào & 2/4 \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 \section{Giao diện và chức năng chính}
 \label{sec:chucnang}
 
 \subsection{Trang giám sát}
 
-% TODO: Chụp màn hình trang Xem trực tiếp, lưu vào figures/ui_live.png
 \begin{figure}[H]
 \centering
-% \includegraphics[width=\textwidth]{figures/ui_live.png}
-\fbox{\parbox[c][6cm][c]{0.9\textwidth}{\centering\todo{Ảnh chụp màn hình trang
-Giám sát: lưới camera chiếm toàn màn, hộp giới hạn quanh người, vạch đếm màu vàng,
-mũi tên Vào/Ra, số đếm ở góc dưới mỗi ô}}}
+\includegraphics[width=\textwidth]{figures/ui_live.png}
 \caption{Trang giám sát. Lưới tự co số cột theo số camera đang hiển thị nên khung
 hình luôn lấp hết chiều ngang và chiều cao còn lại.}
 \label{fig:ui-live}
@@ -64,13 +86,9 @@ hiện tên camera, trạng thái kết nối, tốc độ xử lý và độ ph
 từng ô cho phép ngắt luồng, khi đó ô chuyển sang màn hình chờ và hệ thống tự kết
 nối lại theo chu kỳ ba giây.
 
-% TODO: Chụp màn hình camera đang phóng to kèm bảng cảnh báo, lưu vào figures/ui_alert.png
 \begin{figure}[H]
 \centering
-% \includegraphics[width=\textwidth]{figures/ui_alert.png}
-\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering\todo{Ảnh chụp camera đang phóng
-to: khung hình lớn bên trái, bảng "Cảnh báo camera này" bên phải kèm ảnh chụp từng
-lượt và hai nút Xác nhận, Đóng}}}
+\includegraphics[width=\textwidth]{figures/ui_alert.png}
 \caption{Cảnh báo chỉ hiện khi phóng to một camera đang chạy pipeline, và chỉ hiện
 cảnh báo của đúng camera đó.}
 \label{fig:ui-alert}
@@ -89,13 +107,9 @@ tiếp thì không có đoạn video tương ứng nên nút tự ẩn.
 
 \subsection{Trang cấu hình}
 
-% TODO: Chụp màn hình bước vẽ vạch, lưu vào figures/ui_pipeline.png
 \begin{figure}[H]
 \centering
-% \includegraphics[width=\textwidth]{figures/ui_pipeline.png}
-\fbox{\parbox[c][6cm][c]{0.9\textwidth}{\centering\todo{Ảnh chụp bước 3 của trình
-hướng dẫn: ảnh từ camera, vạch vàng kéo được bằng chuột, hai mũi tên xanh/đỏ chỉ
-chiều Vào/Ra}}}
+\includegraphics[width=\textwidth]{figures/ui_pipeline.png}
 \caption{Bước vẽ vạch đếm. Hai mũi tên cho biết phía nào được tính là Vào trước
 khi pipeline chạy, tránh phải chạy thử rồi mới phát hiện ngược chiều.}
 \label{fig:ui-pipeline}
@@ -172,17 +186,132 @@ nguồn từ đầu mà mọi phép thử trước đó đều không chạm t�
 
 \subsection{Trang xem lại và tìm kiếm}
 
-% TODO: Chụp màn hình trang Xem lại, lưu vào figures/ui_playback.png
 \begin{figure}[H]
 \centering
-% \includegraphics[width=\textwidth]{figures/ui_playback.png}
-\fbox{\parbox[c][6cm][c]{0.9\textwidth}{\centering\todo{Ảnh chụp trang Xem lại:
-trình phát video, thanh thời gian 24 giờ có các vùng xanh là đoạn đã ghi và các
-vạch nhỏ là sự kiện, ô tìm kiếm tiếng Việt bên phải}}}
+\includegraphics[width=\textwidth]{figures/ui_playback.png}
 \caption{Trang xem lại. Thanh thời gian gộp cả vùng đã ghi hình lẫn vị trí sự
 kiện; bấm vào một vạch sự kiện sẽ tua video tới đúng giây đó.}
 \label{fig:ui-playback}
 \end{figure}
+
+\subsubsection*{Tách việc ghi nhận khỏi việc đếm}
+\label{sub:ghi-va-dem}
+
+Bản đầu chỉ ghi sự kiện cho đúng những lớp đối tượng và đúng chiều mà pipeline
+được cấu hình để đếm. Hệ quả là muốn về sau tra cứu được xe đạp thì phải đoán
+trước từ lúc dựng pipeline, còn không thì dữ liệu vĩnh viễn không tồn tại. Điều
+này mâu thuẫn với cách trang xem lại tự giới thiệu: người dùng chọn camera và
+chọn ngày, không ai nghĩ kết quả lại phụ thuộc vào một cấu hình đặt từ tuần
+trước.
+
+Câu hỏi tự nhiên là vì sao không quét thẳng trên video lúc tìm kiếm. Phép đo trả
+lời dứt điểm: trên đoạn ghi hình 854$\times$1518, tốc độ quét đạt 12,3 khung mỗi
+giây, tức quét một phút video mất 49 giây. Riêng dữ liệu của một ngày --- 862
+phút --- cần gần 12 giờ. Tìm kiếm phải đọc bảng đã tính sẵn, không có cách nào
+khác.
+
+Nhưng phép đo thứ hai mới là chỗ đáng nói:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrr}
+\toprule
+\textbf{Số lớp yêu cầu} & \textbf{Thời gian} & \textbf{Tốc độ} \\
+\midrule
+1 lớp (chỉ Người) & 3,25 s & 12,3 khung/giây \\
+6 lớp (người, xe đạp, ô tô, xe máy, xe buýt, xe tải) & 3,17 s & 12,6 khung/giây \\
+\bottomrule
+\end{tabular}
+\caption{Chi phí suy luận không phụ thuộc số lớp yêu cầu}
+\label{tab:chi-phi-lop}
+\end{table}
+
+Chênh lệch 2,5\%, nằm trong sai số. Lý do là YOLO tính điểm cho toàn bộ tám mươi
+lớp trong một lượt truyền xuôi duy nhất; tham số \code{classes} chỉ lọc bỏ kết
+quả \emph{sau} khi đã tính xong. Nói cách khác, mỗi lần camera thấy một chiếc xe
+đạp thì mô hình đã nhận ra nó rồi, và hệ thống chủ động vứt đi. Đây không phải
+giới hạn tài nguyên mà là một quyết định thiết kế sai.
+
+Cách sửa là tách hai khái niệm vốn bị gộp làm một: \emph{ghi nhận cái gì} và
+\emph{đếm cái gì}. Bộ đếm nhận thêm tham số \code{count\_labels}; mọi lượt cắt
+vạch đều được ghi kèm nhãn thật của nó, nhưng chỉ những lượt khớp cả lớp lẫn
+chiều người dùng chọn mới cộng vào con số hiển thị.
+
+Trong lúc kiểm chứng lộ ra rằng bộ lọc chiều cũng mắc đúng lỗi ấy: pipeline đặt
+``chỉ đếm vào'' thì mọi lượt đi ra bị loại thẳng khỏi danh sách sự kiện, nên tìm
+``người đi ra hôm nay'' trên camera đó không ra gì dù hệ thống đã nhìn thấy đủ.
+Sửa cùng nguyên tắc.
+
+Đo trên video lối đi bộ với đúng cấu hình pipeline đang chạy (chỉ đếm Người,
+chỉ chiều Vào):
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrr}
+\toprule
+& \textbf{Trước} & \textbf{Sau} \\
+\midrule
+Số đếm hiển thị & vào 2, ra 0 & vào 2, ra 0 \\
+Sự kiện tra cứu được & 2 & 8 \\
+\quad trong đó xe đạp & 0 & 2 \\
+\quad trong đó lượt đi ra & 0 & 6 \\
+\bottomrule
+\end{tabular}
+\caption{Số đếm giữ nguyên, dữ liệu tra cứu tăng gấp bốn}
+\label{tab:ghi-va-dem}
+\end{table}
+
+Một chi tiết đáng chú ý ở khung 497 và 532: xe đạp và người cùng cắt vạch trong
+một khung hình, vì đó là một người đang đạp xe. Ghi cả hai thì về sau tra cứu
+được theo cả hai cách, còn chỉ đếm Người nên một thực thể không bị đếm thành hai.
+Đây chính là lý do phải tách hai khái niệm thay vì mở rộng danh sách lớp đếm.
+
+\subsubsection*{Bốn lỗi trong bộ phân tích câu lệnh tiếng Việt}
+\label{sub:loi-tim-kiem}
+
+Kiểm thử tìm kiếm bằng ba mươi mấy câu lệnh, mỗi câu vừa xét xem hệ thống hiểu
+gì vừa đối chiếu từng kết quả trả về với bộ lọc, đã lộ ra bốn lỗi cùng một họ.
+
+Gốc chung của cả bốn là việc dò từ khoá bằng phép kiểm chuỗi con trên văn bản đã
+bỏ dấu. Tiếng Việt bỏ dấu thì nhiều từ khác hẳn nhau lại trùng nhau: ``tối'',
+``tôi'' và ``tới'' đều thành \code{toi}; còn chính chữ \code{camera} thì chứa sẵn
+\code{ra}.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Câu người dùng gõ} & \textbf{Hệ thống hiểu} & \textbf{Đúng ra phải là} \\
+\midrule
+\emph{người đi ra tối qua}  & hôm nay buổi tối & hôm qua buổi tối \\
+\emph{camera của tôi}       & chiều ra, 18h--24h & không có tiêu chí nào \\
+\emph{người đi vào tới 15h} & hôm nay buổi tối & không nhận ra \\
+\emph{người đi vào lúc 12h} & bỏ qua phần giờ & 12h--13h \\
+\bottomrule
+\end{tabular}
+\caption{Bốn lỗi phát hiện khi kiểm thử tìm kiếm tiếng Việt}
+\label{tab:loi-tim-kiem}
+\end{table}
+
+Điểm nguy hiểm không nằm ở chỗ hiểu sai, mà ở chỗ hiểu sai một cách \emph{tự
+tin}: dòng ``đã hiểu'' trên giao diện vẫn liệt kê đầy đủ tiêu chí, nên người dùng
+không có cách nào biết kết quả đã bị cắt theo một khung giờ họ không hề yêu cầu.
+Câu ``camera của tôi'' đáng lẽ trả về mọi sự kiện thì lại chỉ trả về khoảng
+18h--24h của hôm nay.
+
+Sửa bằng cách thay toàn bộ phép kiểm chuỗi con bằng so khớp theo ranh giới từ,
+bổ sung hư từ vào danh sách từ dừng, nhận thêm dạng ``buổi + qua/nay'' để phân
+biệt tối hôm qua với tối hôm nay, và siết điều kiện dò tên camera --- trước đây
+chỉ cần một chữ ba ký tự trùng ở bất kỳ đâu trong tên hay vị trí, nên chữ
+``của'' khớp ngay với camera ``Cửa tàu điện ngầm''.
+
+Riêng những dạng chưa xử lý được như ``từ 8h'', ``trước 14h'' thì để hệ thống báo
+thẳng là không nhận ra tiêu chí, thay vì đoán bừa thành một khung giờ. Với một
+công cụ tra cứu, im lặng trả về kết quả sai nguy hiểm hơn nhiều so với việc thừa
+nhận không hiểu câu hỏi.
+
+Sau khi sửa, ba bộ kiểm chạy sạch: 17 câu về thời gian, 11 câu về nhận nhầm
+chiều và camera, 19 câu đầu--cuối có đối chiếu từng kết quả với bộ lọc.
 
 \section{Kết quả thực nghiệm}
 \label{sec:thucnghiem}
@@ -357,6 +486,272 @@ Kết quả này dẫn tới thay đổi trong tầng dịch: từ điển Việ
 \emph{"người đeo ba lô"} thành \code{backpack} chứ không phải \code{person with
 backpack}, và bản dịch tự động cũng bị cắt bỏ phần chủ ngữ đứng đầu trước khi dùng.
 
+\subsection{Hiệu chỉnh vùng đệm của bộ đếm}
+\label{sec:hieuchinh-vungdem}
+
+Sáu pipeline đếm qua vạch trên năm video mẫu được dùng làm bộ kiểm thử. Do suy luận
+YOLO chiếm gần hết thời gian chạy, kết quả phát hiện của mỗi video được lưu đệm ra
+tệp \code{.pkl}; các lần quét tham số sau đó chỉ chạy lại phần đếm, nhờ vậy một lượt
+quét đầy đủ mất vài giây thay vì vài chục phút.
+
+Chuẩn đối chiếu không lấy từ số đếm mà từ bốn lượt đã kiểm tra bằng mắt trên ảnh cắt
+sát từng người: ba lượt đi qua thật (một người vào cửa hàng tiện lợi, hai người đi
+qua cửa sảnh ga ra ngoài) và một người đứng xếp hàng cạnh vạch ở ga tàu điện ngầm
+--- trường hợp bắt buộc không được đếm.
+
+\begin{table}[H]
+\centering
+\caption{Quét hệ số vùng đệm và độ trễ xác nhận. Chỉ cấu hình 0{,}03 với ba khung
+xác nhận không mắc sai sót nào; các mức rộng hơn bỏ sót lượt đi qua thật.}
+\label{tab:vungdem}
+\small
+\begin{tabularx}{\textwidth}{@{}rrX@{}}
+\toprule
+\textbf{Hệ số} & \textbf{Độ trễ} & \textbf{Sai sót so với chuẩn đối chiếu} \\
+\midrule
+0{,}12 & 3--8 & Bỏ sót cả ba lượt đi qua thật \\
+0{,}08 & 3--5 & Bỏ sót hai lượt \\
+0{,}05 & 3     & Bỏ sót một lượt \\
+\textbf{0{,}03} & \textbf{3} & \textbf{Không có} \\
+0{,}02 & 3     & Không có, nhưng chặt hơn mà không thêm lợi ích \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Số đếm trước và sau khi đổi hệ số vùng đệm từ 0{,}12 xuống 0{,}03. Ba lượt
+đi qua thật bị bỏ sót trước đây nay được đếm đúng.}
+\label{tab:truocsau}
+\small
+\begin{tabularx}{\textwidth}{@{}Xccc@{}}
+\toprule
+\textbf{Pipeline} & \textbf{Trước} & \textbf{Sau} & \textbf{Ghi chú} \\
+\midrule
+Đếm người qua cửa hàng          & 0/0 & \textbf{1/0}  & Bắt được lượt vào cửa \\
+Đếm người qua cửa sảnh ga       & 1/3 & \textbf{1/5}  & Bắt được hai lượt ra \\
+Đếm qua vạch --- Cửa tàu điện   & 5/9 & 6/10 & Mã vết bị trôi \\
+Đếm qua vạch --- người đeo túi  & 8/5 & 9/6  & Mã vết bị trôi \\
+Đếm người mặc áo trắng          & 2/4 & 2/4  & Không đổi \\
+Đếm người qua cổng              & 2/4 & 2/4  & Không đổi \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Trường hợp quyết định là camera cửa hàng tiện lợi. Người trong cảnh đứng sát camera
+nên hộp giới hạn cao 1178 điểm ảnh, trong khi cả quãng bước từ vỉa hè vào trong cửa
+chỉ đưa bàn chân dịch 288 điểm ảnh theo phương vuông góc với vạch, và chỉ vượt qua
+vạch được 60 điểm ảnh trước khi người đó khuất vào bên trong. Với hệ số 0{,}12, dải
+đệm rộng 141 điểm ảnh --- lượt đi vào thật bị bỏ. Với hệ số 0{,}03, dải đệm rộng 35
+điểm ảnh và lượt này được đếm đúng.
+
+Bài học rút ra là bằng chứng \emph{đã đi qua thật} không nên đến từ việc đối tượng đi
+\emph{xa} vạch, vì quãng đường theo phương vuông góc phụ thuộc vào góc đặt camera chứ
+không phản ánh hành vi. Bằng chứng đến từ trung bình trượt mười khung hình cộng với
+yêu cầu giữ nguyên phía mới trong ba khung liên tiếp. Dải đệm chỉ cần đủ rộng để chặn
+nhiễu của hộp giới hạn.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.86\textwidth]{figures/dem_cua_hang.jpg}
+\caption{Camera cửa hàng tiện lợi sau khi hiệu chỉnh. Vạch ngang nằm ở ngưỡng cửa,
+mũi tên chỉ chiều Vào hướng vào trong cửa hàng, bảng đếm ghi nhận đúng một lượt vào.}
+\label{fig:demcuahang}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[height=0.52\textheight]{figures/dem_sanh_ga.jpg}
+\caption{Camera cửa ra vào sảnh ga, khung hình cuối đoạn. Vạch ngang đặt ngay dưới
+dãy cửa thoát, mũi tên Ra hướng về phía cửa. Đây là cảnh đông nhất trong bộ kiểm
+thử, trung bình 39 người mỗi khung hình.}
+\label{fig:demsanhga}
+\end{figure}
+
+Hai pipeline trên video ga tàu điện ngầm tăng thêm một lượt mỗi chiều. Nguyên nhân đã
+truy được: một mã vết tồn tại 694 khung hình nhưng bị ByteTrack gán lần lượt cho nhiều
+người khác nhau trong đám đông, sinh ra ba lượt cắt vạch trong khi không ai đi qua ba
+lần. Đây là hạn chế của khâu bám vết ở cảnh dày đặc, không phải của bộ đếm. Kéo dài
+thời gian chống đếm lặp lên 250 khung hình dập được hiện tượng này, nhưng cách đó bị
+loại vì thời gian chống đếm lặp tính theo khung hình: 250 khung là 4{,}2 giây ở video
+60~fps nhưng 10 giây ở video 25~fps, khiến hành vi thay đổi theo tốc độ nguồn --- và
+quan trọng hơn, nó chỉ che triệu chứng của một khiếm khuyết nằm ở nơi khác.
+
+\subsection{Độ chính xác đo bằng nhãn chuẩn MOT17}
+\label{sec:mot17}
+
+Các phép kiểm ở trên đều đối chiếu bằng mắt trên vài vết, nên chỉ trả lời được ``có sai
+ở chỗ này không'' chứ không cho ra con số. Mục này dùng bộ dữ liệu bám vết công khai
+MOT17, trong đó \emph{mỗi khung hình đã có sẵn hộp giới hạn, mã vết và độ nhìn thấy do
+người gán}, nên số lượt qua bất kỳ vạch nào cũng tính ra chính xác được.
+
+Ba chuỗi camera tĩnh của MOT17 dùng được. Bốn chuỗi còn lại quay bằng máy di động nên
+vạch đếm trôi theo khung hình, bài toán không định nghĩa được.
+
+\subsubsection*{Cách so sánh}
+
+Danh sách lượt qua vạch đúng được sinh từ nhãn chuẩn bằng \emph{đúng công thức khoảng
+cách có dấu và vùng đệm mà bộ đếm dùng}. Sau đó mỗi lượt của hệ thống được ghép với
+lượt gần nhất trong nhãn chuẩn: cùng chiều, lệch dưới 45 khung hình và 200 điểm ảnh.
+Ghép được là đếm đúng, không ghép được là đếm thừa, còn dư trong nhãn chuẩn là bỏ sót.
+
+Dùng chung công thức là bắt buộc. Lần chạy đầu tiên tôi tự viết lại phép tính chiều
+theo quy ước riêng; với vạch dọc thì dấu bị ngược so với bộ đếm nên mọi lượt đều lệch
+chiều và không ghép được cặp nào, cho ra ``độ chính xác 27\%'' trong khi tổng số lượt
+hai bên chỉ chênh nhau đúng một.
+
+\begin{table}[H]
+\centering
+\caption{Độ chính xác đếm ở cấu hình vạch tốt nhất của từng chuỗi. Ghép cặp chặt: cùng
+chiều, lệch dưới 1{,}5 giây và 200 điểm ảnh.}
+\label{tab:mot17}
+\small
+\begin{tabularx}{\textwidth}{@{}Xrrrrrrrr@{}}
+\toprule
+\textbf{Chuỗi} & \textbf{Chuẩn} & \textbf{Hệ thống} & \textbf{Khớp} &
+\textbf{Thừa} & \textbf{Sót} & \textbf{Độ phủ} & \textbf{Độ chuẩn} & \textbf{F1} \\
+\midrule
+MOT17-02 & 15 & 12 & 11 & 1 & 4 & 73\% & 92\% & 0{,}81 \\
+MOT17-04 & 15 & 15 & \textbf{15} & \textbf{0} & \textbf{0} & \textbf{100\%} & \textbf{100\%} & \textbf{1{,}00} \\
+MOT17-09 & 13 & 12 & 12 & 0 & 1 & 92\% & 100\% & 0{,}96 \\
+\midrule
+\textbf{Cộng} & \textbf{43} & \textbf{39} & \textbf{38} & \textbf{1} & \textbf{5} &
+\textbf{88\%} & \textbf{97\%} & \textbf{0{,}92} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Trên 43 lượt qua vạch có nhãn chuẩn, hệ thống đếm đúng 38 lượt, đếm thừa 1 và bỏ sót 5.
+
+\subsubsection*{Độ chính xác đi theo độ nhìn thấy, không theo mật độ}
+
+\begin{table}[H]
+\centering
+\caption{Đặc điểm ba cảnh. Chuỗi đông người nhất lại chính xác nhất; thứ tự F1 khớp
+hoàn toàn với thứ tự độ nhìn thấy.}
+\label{tab:mot17-canh}
+\small
+\begin{tabularx}{\textwidth}{@{}Xrrrr@{}}
+\toprule
+\textbf{Chuỗi} & \textbf{Người/khung} & \textbf{Độ nhìn thấy} &
+\textbf{Cao trung vị} & \textbf{F1} \\
+\midrule
+MOT17-02 --- Quảng trường  & 11{,}2 & 40\% & 171 px & 0{,}81 \\
+MOT17-09 --- Vỉa hè        &  9{,}5 & 59\% & 285 px & 0{,}96 \\
+MOT17-04 --- Phố đêm       & \textbf{25{,}7} & \textbf{62\%} & 175 px & \textbf{1{,}00} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+MOT17-04 đông gấp 2{,}7 lần MOT17-09 nhưng chính xác hơn. Đông người không phải vấn đề;
+\textbf{che khuất} mới là vấn đề. Camera của MOT17-04 đặt trên cao nên người ít che
+nhau, còn MOT17-02 đặt ngang tầm mắt nhìn dọc một con phố dài, hàng chục người ở xa
+nhỏ như hạt gạo và che lấp nhau liên tục.
+
+\subsubsection*{Lỗi nằm ở khâu phát hiện, không ở khâu đếm}
+
+Đo riêng độ phủ của khâu phát hiện --- tỉ lệ hộp trong nhãn chuẩn mà YOLO tìm được với
+$\text{IoU} \geq 0{,}5$:
+
+\begin{table}[H]
+\centering
+\caption{Độ phủ phát hiện thấp hơn hẳn độ chính xác đếm. Tính riêng dải quanh vạch thì
+cao hơn nhiều so với toàn khung hình.}
+\label{tab:mot17-phathien}
+\small
+\begin{tabularx}{\textwidth}{@{}Xrrrr@{}}
+\toprule
+\multirow{2}{*}{\textbf{Chuỗi}} & \multicolumn{2}{c}{\textbf{Toàn khung hình}} &
+\multicolumn{2}{c}{\textbf{Dải quanh vạch $\pm$120 px}} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+ & \textbf{Số hộp} & \textbf{Độ phủ} & \textbf{Số hộp} & \textbf{Độ phủ} \\
+\midrule
+MOT17-02 & 18\,581 & 37\% & 2\,318 & 44\% \\
+MOT17-04 & 47\,557 & 54\% & 3\,629 & \textbf{76\%} \\
+MOT17-09 &  5\,325 & 80\% &   287 & \textbf{84\%} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+YOLOv8n bỏ sót hơn một nửa số người có trong nhãn chuẩn, nhưng đếm vẫn đạt 0{,}81 đến
+1{,}00. Không có mâu thuẫn ở đây: đếm qua vạch chỉ cần thấy một người \emph{đúng lúc họ
+bước qua vạch}, không cần thấy họ suốt video. Một người bị bỏ sót ở chín phần mười số
+khung vẫn được đếm đúng nếu hiện ra ở vài khung quanh vạch.
+
+Hệ quả cho việc đánh giá: \textbf{độ phủ phát hiện toàn khung hình là chỉ số sai} để
+đo chất lượng một hệ thống đếm. Chỉ số đúng là độ phủ \emph{tại vạch}, và cột bên phải
+Bảng~\ref{tab:mot17-phathien} cho thấy nó cao hơn đáng kể.
+
+Truy tiếp vào từng lượt bỏ sót thì nguyên nhân lộ rõ:
+
+\begin{table}[H]
+\centering
+\caption{Độ nhìn thấy tại thời điểm qua vạch. Lượt bỏ sót luôn có độ nhìn thấy thấp
+hơn hẳn lượt đếm đúng.}
+\label{tab:mot17-sot}
+\small
+\begin{tabularx}{\textwidth}{@{}Xcc@{}}
+\toprule
+\textbf{Chuỗi} & \textbf{Khi đếm đúng} & \textbf{Khi bỏ sót} \\
+\midrule
+MOT17-02 & 71\% & 58\% \\
+MOT17-04 & 82\% & --- (không sót lượt nào) \\
+MOT17-09 & 60\% & \textbf{0\%} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Lượt bỏ sót duy nhất của MOT17-09 có độ nhìn thấy \textbf{0\%}: người đó bị che hoàn
+toàn đúng khoảnh khắc bước qua vạch. Không mô hình phát hiện nào cứu được trường hợp
+này --- đây là giới hạn vật lý, không phải khiếm khuyết cài đặt.
+
+\subsubsection*{Hướng vạch quyết định độ ổn định}
+
+Với mỗi chuỗi, thay vì chỉ lấy F1 cao nhất, xét \emph{biên độ dao động} của F1 qua sáu
+vị trí vạch:
+
+\begin{table}[H]
+\centering
+\caption{Hướng vạch vuông góc với hướng đi trội là hướng cho kết quả ổn định, đặt ở đâu
+cũng tương đương. Hướng còn lại có thể chạm đỉnh cao nhưng cũng có thể rơi về 0.}
+\label{tab:mot17-huong}
+\small
+\begin{tabularx}{\textwidth}{@{}Xcccc@{}}
+\toprule
+\multirow{2}{*}{\textbf{Chuỗi}} & \multirow{2}{*}{\textbf{Hướng đi trội}} &
+\multicolumn{1}{c}{\textbf{Vạch dọc}} & \multicolumn{1}{c}{\textbf{Vạch ngang}} &
+\multirow{2}{*}{\textbf{Ổn định}} \\
+ & & \textbf{F1 (biên độ)} & \textbf{F1 (biên độ)} & \\
+\midrule
+MOT17-02 & 80\% đi ngang & 0{,}81 (0{,}15) & 0{,}76 (0{,}76) & dọc \\
+MOT17-09 & 80\% đi ngang & 0{,}96 (0{,}14) & 0{,}69 (0{,}69) & dọc \\
+MOT17-04 & 38\% đi dọc   & 1{,}00 (0{,}71) & 0{,}97 (0{,}17) & ngang \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Quy luật đúng cả ba chuỗi. Điều đáng nói là nó dự đoán \emph{độ ổn định} chứ không phải
+đỉnh: ở MOT17-04, vạch dọc chạm 1{,}00 nhưng dao động từ 0{,}29 đến 1{,}00 tuỳ vị trí,
+còn vạch ngang chỉ đạt 0{,}97 nhưng giữ trong khoảng 0{,}80--0{,}97 ở mọi vị trí. Với
+người vận hành không có điều kiện dò tham số, ổn định quan trọng hơn đỉnh.
+
+Chỉ số quyết định không phải góc di chuyển trung bình mà là \textbf{tỉ lệ số vết đi
+theo hướng trội}. Trên 70\% số vết đi một hướng thì bắt buộc đặt vạch vuông góc với
+hướng đó, đặt sai mất khoảng 0{,}3 điểm F1. Khi hướng đi trộn lẫn --- như MOT17-04 với
+32\% ngang và 38\% dọc --- thì mọi vạch đều nhận được quãng dịch chuyển vuông góc đủ
+lớn, và hướng vạch không còn quan trọng.
+
+\subsubsection*{Giới hạn của đánh giá này}
+
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item Ba chuỗi, 43 lượt. Đủ để thấy xu hướng, chưa đủ để công bố con số chắc chắn.
+  \item Chỉ đánh giá bài toán đếm người. MOT17 không gán nhãn phương tiện nên phần đếm
+        xe chưa có căn cứ định lượng.
+  \item Nhãn chuẩn cũng do người gán, có thể sót người ở rìa khung hoặc quá nhỏ.
+  \item Cửa sổ ghép cặp 45 khung và 200 điểm ảnh là lựa chọn chủ quan. Nới rộng ra thì
+        F1 tăng một cách giả tạo.
+\end{itemize}
+
 \subsection{Tốc độ xử lý}
 
 \begin{table}[H]
@@ -379,8 +774,35 @@ Cả ba trường hợp đều vượt xa nhịp 15 khung hình mỗi giây mà 
 tiêu, nên vòng lặp chủ động nghỉ giữa các khung để nhường CPU. Với cấu hình này,
 một máy có thể phục vụ đồng thời nhiều camera.
 
-\todo{Nếu chạy trên máy không có GPU, đo lại và bổ sung một hàng cho CPU thuần.
-Ghi rõ cấu hình máy để người đọc so sánh được.}
+\subsubsection*{Khi không có GPU}
+
+Đo lại cùng mô hình và cùng kích thước ảnh vào, nhưng buộc chạy trên CPU:
+
+\begin{table}[H]
+\centering
+\caption{Tốc độ khi buộc suy luận trên CPU. Chậm hơn khoảng năm lần so với Metal,
+nhưng vẫn đủ cho một đến hai camera ở nhịp 5 khung hình mỗi giây.}
+\label{tab:hieunang-cpu}
+\small
+\begin{tabularx}{\textwidth}{@{}Xrrr@{}}
+\toprule
+\textbf{Nguồn} & \textbf{Độ phân giải} & \textbf{Tốc độ xử lý} & \textbf{Độ trễ} \\
+\midrule
+\code{mot17-09.mp4}  & 1920$\times$1080 & 7{,}5 fps & 134 ms \\
+\code{loi-di-bo.mp4} & 3840$\times$2160 & 8{,}3 fps & 120 ms \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Điểm đáng chú ý là độ phân giải nguồn gần như không ảnh hưởng: video 4K và video Full HD
+cho tốc độ ngang nhau. Nguyên nhân là YOLO thu nhỏ mọi khung hình về cùng kích thước
+960 điểm ảnh trước khi suy luận, nên phần tính toán nặng nhất không phụ thuộc vào độ
+phân giải gốc. Chỉ khâu giải mã video và thu nhỏ ảnh mới tốn thêm, và phần đó nhỏ.
+
+Với máy không có GPU, cấu hình khả dụng là một đến hai camera đặt \code{target\_fps}
+khoảng 5. Ở nhịp đó, người đi bộ tốc độ thường vẫn để lại đủ khung hình quanh vạch để
+đếm chính xác --- ngưỡng nguy hiểm là khi khoảng cách giữa hai khung vượt quá kích
+thước đối tượng, lúc đó bộ bám vết mất dấu.
 
 \section{Kịch bản kiểm thử}
 \label{sec:kiemthu}
@@ -406,13 +828,39 @@ TC-09 & Ghi hình phân đoạn & Sinh tệp MP4 mỗi 60 giây & Đạt \\
 TC-10 & Tua video xem lại & Thanh tua hoạt động nhờ hỗ trợ Range & Đạt \\
 TC-11 & Tìm kiếm tiếng Việt & Phân tích đúng đối tượng, chiều, thời gian & Đạt \\
 TC-12 & Xác nhận và đóng cảnh báo & Trạng thái đổi, ghi thời điểm xử lý & Đạt \\
-TC-13 & Dọn dữ liệu quá hạn & Xoá cả bản ghi lẫn tệp trên đĩa & \todo{xác nhận} \\
+TC-13 & Dọn dữ liệu quá hạn & Xoá cả bản ghi lẫn tệp trên đĩa & Đạt \\
+TC-14 & Tải đoạn ghi hình về máy & Tệp MP4 kèm tên theo camera và mốc giờ & Đạt \\
+TC-15 & Tải đoạn đang ghi dở & Từ chối kèm giải thích, không sinh tệp hỏng & Đạt \\
+TC-16 & Thêm camera nguồn RTSP & Thăm dò thành công, luồng lên trực tuyến & Đạt \\
+TC-17 & Nguồn RTSP mất rồi có lại & Chuyển \emph{ngoại tuyến} rồi tự trực tuyến lại & Đạt \\
+TC-18 & Đối chiếu lượt đếm với quan sát & Mọi lượt đếm khớp ảnh cắt kiểm tra bằng mắt & Đạt \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\todo{Chạy lại toàn bộ kịch bản trên môi trường của bạn, cập nhật cột trạng thái
-và chụp màn hình minh hoạ cho vài kịch bản quan trọng.}
+Ba kịch bản TC-16 và TC-17 được thực hiện trên máy chủ RTSP dựng tại chỗ bằng
+\code{mediamtx}, phát các video mẫu thành luồng giả lập
+(\code{scripts/rtsp\_gia\_lap.sh}). Cách này thay cho nguồn RTSP công khai vì các
+máy chủ demo phổ biến đều đã ngừng hoạt động khi kiểm thử, còn các nguồn tìm thấy
+trên những trang tổng hợp phần lớn là camera bị hở cấu hình chứ không phải nguồn
+được phép sử dụng.
+
+Hai chi tiết kỹ thuật phát sinh khi dựng luồng giả lập, cả hai đều biểu hiện bằng
+cùng một thông báo \code{400 Bad Request} không nói rõ nguyên nhân. Thứ nhất, tệp
+MP4 lưu tham số SPS/PPS ở phần mô tả theo dạng AVCC, trong khi RTSP cần chúng nằm
+ngay trong dòng bit theo dạng Annex-B, nên phải chèn bộ lọc
+\code{h264\_mp4toannexb}. Thứ hai, \code{mediamtx} từ chối mọi đường dẫn chưa khai
+báo trong tệp cấu hình; lý do thật chỉ hiện ra khi bật mức nhật ký \code{debug}.
+
+Kịch bản TC-13 được kiểm chứng trên \emph{bản sao} cơ sở dữ liệu chứ không phải bản
+đang chạy: tạo thêm ba đoạn ghi hình quá hạn kèm tệp thật trên đĩa, gọi đúng thủ tục
+dọn dẹp, rồi đếm lại. Kết quả 23 đoạn và 115 sự kiện quá hạn cùng cả ba tệp trên đĩa
+đều biến mất --- xác nhận thủ tục xoá song song cả bản ghi lẫn tệp, không để lại tệp
+mồ côi chiếm chỗ.
+
+TC-18 là kịch bản khác hẳn các kịch bản còn lại: nó không kiểm tra một chức năng có
+chạy hay không, mà kiểm tra \emph{con số đếm ra có đúng không}. Toàn bộ số liệu và
+phương pháp nằm ở Mục~\ref{sec:mot17}.
 
 \section{Một số lỗi gặp phải và cách khắc phục}
 \label{sec:loi}
@@ -558,6 +1006,7 @@ con số mới đáng tin. Bài học là với phép đo trên hệ thống đa
 nhận giả định của phép đo trước khi tin vào kết quả của nó.
 
 \subsection{Backend chết đột ngột khi bật luồng Thông minh}
+\label{sec:loi-sigsegv}
 \label{sub:mps-segfault}
 
 Mỗi lần kích hoạt một pipeline Thông minh, tiến trình backend chết trong khoảng
@@ -664,6 +1113,74 @@ cáo sự cố ở tầng hệ điều hành thường là nguồn thông tin du
 đoán từ hoàn cảnh --- ở đây là ``nạp mô hình lớn nên chắc hết bộ nhớ'' --- dẫn
 sai hướng hoàn toàn.
 
+\subsection{Vùng đệm của bộ đếm đo sai đơn vị}
+\label{sec:loi-vungdem}
+
+Sau khi bổ sung hai camera mới --- một cửa ra vào sảnh ga và một cửa hàng tiện lợi
+--- pipeline trên camera cửa hàng báo 0 lượt vào dù trong đoạn video có người bước
+hẳn qua cửa tự động vào bên trong.
+
+Bản cài đặt khi đó tính dải đệm bằng \code{margin\_frac} nhân với \emph{chiều dài
+vạch}. Hệ quả đo được trên hai camera thật:
+
+\begin{table}[H]
+\centering
+\caption{Cùng một thuật toán nhưng dải đệm chênh nhau hơn hai lần khi quy về chiều
+cao đối tượng, chỉ vì hai vạch có chiều dài khác nhau.}
+\label{tab:vungdem-sai}
+\small
+\begin{tabularx}{\textwidth}{@{}Xrrr@{}}
+\toprule
+\textbf{Camera} & \textbf{Chiều dài vạch} & \textbf{Dải đệm} &
+\textbf{\% chiều cao người} \\
+\midrule
+Cửa hàng tiện lợi (4K) & 3844 px & 115 px & 10\% \\
+Cửa ra vào sảnh ga     & 1080 px &  32 px & 22\% \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Chiều dài vạch là lựa chọn của người dùng khi kéo chuột, không mang thông tin nào về
+cảnh quay. Lấy nó làm đơn vị nghĩa là cùng một lượt đi qua sẽ được đếm hay bị bỏ tuỳ
+theo người dùng vẽ vạch dài hay ngắn. Đại lượng mà dải đệm cần chặn là nhiễu của hộp
+giới hạn, mà nhiễu này tỉ lệ với kích thước đối tượng trong ảnh. Bản sửa đổi sang lấy
+theo chiều cao hộp của chính đối tượng đang xét, có cận dưới 4 điểm ảnh cho các hộp
+rất nhỏ.
+
+Lần sửa đầu tiên chọn hệ số 0{,}12 vì nó nằm giữa dải cho kết quả ổn định khi quét.
+Đó là một sai lầm về phương pháp: dải ổn định chỉ nói lên rằng số đếm không đổi trong
+khoảng đó, không nói lên rằng số đếm \emph{đúng}. Với hệ số 0{,}12, lượt vào cửa hàng
+vẫn bị bỏ sót vì dải đệm rộng 141 điểm ảnh trong khi người đó chỉ vượt qua vạch được
+60 điểm ảnh.
+
+Chỉ khi dựng chuẩn đối chiếu bằng cách cắt ảnh sát từng đối tượng và xem tận mắt thì
+hệ số mới xác định được là 0{,}03, theo số liệu ở Mục~\ref{sec:hieuchinh-vungdem}.
+Quá trình này cũng lật lại hai kết luận trước đó: hai vết ở camera sảnh ga từng bị
+xếp nhầm là ``người đứng cạnh vạch, không đếm là đúng'', thực chất là hai người đi
+xuyên qua cửa ra ngoài --- khoảng cách tới vạch giảm đơn điệu từ $+149$ xuống $-30$
+điểm ảnh, không hề dao động.
+
+Bài học rút ra: một tham số hình học phải được đo bằng đại lượng có ý nghĩa vật lý
+trong bài toán. Và khi hiệu chỉnh tham số, chuẩn đối chiếu phải là quan sát trực tiếp
+trên dữ liệu gốc, không phải sự ổn định của chính con số đầu ra.
+
+\subsection{Tham số bị chép ở hai nơi}
+\label{sec:loi-chepcung}
+
+Bộ dựng video kiểm thử ban đầu chép cứng toạ độ vạch của từng camera. Khi vạch được
+vẽ lại trên giao diện, bản chép cứng không đổi theo, nên video xuất ra mang vạch cũ
+trong khi hệ thống đang đếm theo vạch mới. Sai lệch này không để lại dấu hiệu nào:
+video vẫn phát bình thường, chỉ là vạch trong đó không phải vạch đang chạy.
+
+Cùng một lỗi lặp lại ngay sau đó với hệ số vùng đệm: giá trị mặc định của tham số
+dòng lệnh \code{-{}-bien} được chép cứng, nên lượt chạy đầu tiên sau khi sửa cấu hình
+vẫn cho ra số của giá trị cũ.
+
+Bản sửa loại bỏ mọi bản chép: bộ dựng gọi \code{GET /api/pipelines} để lấy cấu hình
+đang chạy, và đọc hệ số vùng đệm thẳng từ \code{app.config}. Tên tệp xuất ra cũng
+kèm mã pipeline, vì một camera có thể chạy nhiều pipeline với vạch khác nhau và
+trước đó tệp sau ghi đè lên tệp trước.
+
 \section{Hạn chế và hướng phát triển}
 \label{sec:hanche}
 
@@ -680,13 +1197,41 @@ sai hướng hoàn toàn.
         quanh, nên mô hình khó khẳng định chắc chắn. Tăng \code{LA\_VOTES} lên 3 để
         lấy theo đa số có giúp, đổi lại thời gian tăng gấp ba.
   \item Câu lệnh phải gõ có dấu. Không dấu thì bộ dịch hiểu sai hoàn toàn.
-  \item Mỗi camera chỉ chạy được một pipeline tại một thời điểm.
-  \item Chưa có phân quyền người dùng; ai truy cập được giao diện đều có toàn
-        quyền.
+  \item \textbf{Hệ thống thiết kế cho mạng nội bộ, chưa sẵn sàng mở ra Internet.}
+        Ba điểm phải xử lý trước khi đưa lên môi trường công khai:
+        \begin{itemize}[leftmargin=*, itemsep=1pt, topsep=2pt]
+          \item Không có xác thực. Ai có đường liên kết đều có toàn quyền thêm hoặc
+                xoá camera, xoá pipeline, xem toàn bộ video đã ghi. Chữ ``admin'' ở
+                góc giao diện chỉ là nhãn hiển thị.
+          \item Ô nhập nguồn video nhận đường dẫn tuỳ ý trên máy chủ, không giới hạn
+                trong thư mục \code{videos/}. Thông báo thành công hay thất bại của
+                nút kiểm tra kết nối cho biết một tệp có tồn tại hay không, đủ để dò
+                cấu trúc ổ đĩa.
+          \item Nhập địa chỉ \code{rtsp://} hoặc \code{http://} bất kỳ khiến máy chủ
+                tự kết nối tới đó, tức có thể bị dùng làm bàn đạp gọi vào mạng nội bộ.
+        \end{itemize}
+        Biện pháp tối thiểu là đặt một tầng đăng nhập phía trước, sau đó mới tính tới
+        việc lọc đường dẫn nguồn.
+  \item \textbf{Chưa có chức năng tải tệp video lên.} Ô nhập nguồn nhận đường dẫn
+        trên \emph{máy chạy máy chủ}, nên người dùng ở máy khác không có cách nào đưa
+        video của mình vào hệ thống --- phải chép tệp sang máy chủ bằng công cụ khác
+        rồi mới gõ đường dẫn.
   \item Bố trí camera nhìn từ trên xuống làm giảm rõ rệt chất lượng phát hiện.
         Góc nghiêng cho kết quả tốt hơn nhiều.
   \item Kết quả đếm phụ thuộc mạnh vào vị trí vạch, như số liệu ở
         Bảng~\ref{tab:anchor} cho thấy. Hệ thống chưa tự gợi ý vị trí tối ưu.
+  \item \textbf{Bám vết đứt gãy ở cảnh dày đặc.} Trên video ga tàu điện ngầm
+        (trung bình hơn 30 người mỗi khung hình), ByteTrack sinh ra mã vết tồn tại
+        rất lâu nhưng bị gán lần lượt cho nhiều người khác nhau. Bộ đếm không có
+        cách nào phân biệt hiện tượng này với một người đi qua lại nhiều lần, nên
+        sinh ra lượt đếm thừa. Hướng xử lý là bổ sung đặc trưng ngoại hình vào
+        khâu ghép vết thay vì chỉ dựa trên chồng lấn hộp giới hạn.
+  \item \textbf{Camera đặt quá gần cửa làm quãng đường vuông góc bị nén.} Ở camera
+        cửa hàng tiện lợi, người bước vào cửa chỉ dịch bàn chân 288 điểm ảnh theo
+        phương vuông góc với vạch trong khi hộp giới hạn cao 1178 điểm ảnh. Bài
+        toán đếm qua vạch vẫn giải quyết được sau khi hiệu chỉnh dải đệm
+        (Mục~\ref{sec:hieuchinh-vungdem}), nhưng biên an toàn còn hẹp. Bố trí
+        camera lùi ra xa hoặc nâng cao góc nhìn sẽ cải thiện đáng kể.
 \end{itemize}
 
 \textbf{Hướng phát triển tiếp theo:}

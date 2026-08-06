@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import mimetypes
 import re
+import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -151,6 +152,53 @@ def segment_video(segment_id: str, request: Request):
     if not path.exists():
         raise HTTPException(404, "Tệp đã bị xoá theo thời hạn lưu trữ")
     return _serve_with_range(path, request)
+
+
+@router.get("/segments/{segment_id}/download")
+def segment_download(segment_id: str):
+    """Tải đoạn ghi hình về máy, kèm sẵn hộp giới hạn và vạch đếm đã vẽ.
+
+    Tách khỏi endpoint phát trực tiếp vì hai việc cần hai kiểu phản hồi khác nhau:
+    trình phát cần `Range` để tua được, còn tải về cần `Content-Disposition` để trình
+    duyệt lưu thành tệp thay vì mở trong tab. Trả nguyên tệp một lần, không cắt khúc.
+
+    Tên tệp đặt theo camera và mốc thời gian để tải nhiều đoạn về cùng thư mục vẫn
+    phân biệt được, thay vì một dãy mã băm vô nghĩa.
+    """
+    row = db.query_one(
+        "SELECT s.*, c.name AS camera_name FROM segments s "
+        "LEFT JOIN cameras c ON c.id = s.camera_id WHERE s.id=?",
+        (segment_id,),
+    )
+    if not row:
+        raise HTTPException(404, "Không tìm thấy đoạn ghi hình")
+    path = config.SEGMENT_DIR / row["path"]
+    if not path.exists():
+        raise HTTPException(404, "Tệp đã bị xoá theo thời hạn lưu trữ")
+
+    # Đoạn chưa đóng thì tệp MP4 còn thiếu `moov atom` — bảng chỉ mục được ghi vào
+    # cuối tệp lúc đóng. Tải về lúc này ra một tệp không trình phát nào mở được, mà
+    # lại không có dấu hiệu gì báo trước. Thà từ chối và nói rõ.
+    if not row["end_ts"]:
+        raise HTTPException(
+            409,
+            "Đoạn này đang được ghi nên chưa hoàn tất. Chờ hết đoạn rồi tải, "
+            "hoặc chọn một đoạn cũ hơn trên dòng thời gian.",
+        )
+
+    ten_cam = _ten_tep_an_toan(row["camera_name"] or row["camera_id"])
+    moc = (row["start_ts"] or "").replace(":", "-").replace("T", "_")[:19]
+    return FileResponse(
+        path, media_type="video/mp4", filename=f"{ten_cam}_{moc}.mp4",
+    )
+
+
+def _ten_tep_an_toan(ten: str) -> str:
+    """Bỏ dấu và ký tự lạ để tên tệp dùng được trên mọi hệ điều hành."""
+    thuong = unicodedata.normalize("NFD", ten)
+    thuong = "".join(c for c in thuong if unicodedata.category(c) != "Mn")
+    thuong = thuong.replace("đ", "d").replace("Đ", "D")
+    return re.sub(r"[^A-Za-z0-9]+", "-", thuong).strip("-").lower() or "camera"
 
 
 @router.get("/at")
