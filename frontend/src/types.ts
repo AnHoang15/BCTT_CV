@@ -237,10 +237,6 @@ export interface TaskCatalog {
   }[];
   directions: { id: CountDirection; name: string; description: string }[];
   auto_resets: { id: AutoReset; name: string }[];
-  speed_presets: {
-    id: string; name: string; description: string;
-    target_fps: number; conf: number; recommended: boolean; bullets: string[];
-  }[];
   trackers: { id: string; name: string; available: boolean }[];
   prompt_examples: string[];
   prompt_hint: string;

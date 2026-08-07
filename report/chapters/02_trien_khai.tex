@@ -2,12 +2,19 @@
 %  Chương 2 — Công việc triển khai
 %  Hướng dẫn của Khoa: không hạn chế số trang, trình bày theo đề mục công việc
 %  (không cần theo trình tự thời gian). Đây là chương dài nhất của báo cáo.
+%
+%  CẤU TRÚC: chương này giữ MỌI quyết định cài đặt; Chương 3 chỉ giữ số đo và
+%  các lỗi đã gặp. Trước đây phần "quan hệ nhiều--nhiều camera/pipeline" và
+%  phần "tách ghi nhận khỏi đếm" nằm nhầm ở Chương 3 nên lập luận dùng chung
+%  một lần phát hiện bị nhắc ba lần.
 % ─────────────────────────────────────────────────────────────────────────────
 \chapter{Công việc triển khai}
 \label{ch:trienkhai}
 
 \section{Kiến trúc tổng thể}
 \label{sec:kientruc}
+
+\subsection{Các thành phần và ranh giới}
 
 Hệ thống tách làm hai tiến trình độc lập. Phần xử lý ảnh viết bằng Python, chạy
 như một máy chủ HTTP; phần giao diện là ứng dụng React chạy trong trình duyệt và
@@ -16,36 +23,54 @@ thay giao diện mà không đụng tới phần xử lý, và ngược lại.
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[node distance=6mm]
+\begin{adjustbox}{max width=\textwidth}
+\begin{tikzpicture}[
+  node distance=7mm,
+  nguon/.style={hop, text width=1.8cm, minimum height=1.05cm},
+  xuly/.style={hop, text width=2.15cm, minimum height=1.05cm},
+  daura/.style={hop, text width=2.55cm, minimum height=1.05cm},
+  phucvu/.style={hopnhan, text width=2.5cm, minimum height=1.05cm}
+]
 
 % ── Nguồn ──
-\node[hop] (rtsp)  {Camera IP\\\scriptsize RTSP};
-\node[hop, below=of rtsp] (usb) {Webcam\\\scriptsize USB};
-\node[hop, below=of usb]  (tep) {Tệp video\\\scriptsize MP4};
+\node[nguon] (rtsp)  {Camera IP\\\scriptsize RTSP};
+\node[nguon, below=of rtsp] (usb) {Webcam\\\scriptsize USB};
+\node[nguon, below=of usb]  (tep) {Tệp video\\\scriptsize MP4};
 \begin{scope}[on background layer]
   \node[khoi, fit=(rtsp)(usb)(tep), label={[font=\scriptsize\bfseries]above:Nguồn video}] (gNguon) {};
 \end{scope}
 
 % ── Luồng xử lý mỗi camera ──
-\node[hopnhan, right=16mm of usb] (worker) {\textbf{CameraWorker}\\\scriptsize một luồng mỗi camera};
-\node[hop, right=10mm of worker, yshift=13mm] (yolo)  {YOLOv8n\\\scriptsize phát hiện};
-\node[hop, below=5mm of yolo]                 (track) {ByteTrack\\\scriptsize bám vết};
-\node[hop, below=5mm of track]                (dem)   {Bộ đếm\\\scriptsize vạch / vùng};
-\node[hop, below=5mm of dem]                  (la3b)  {LA-3B\\\scriptsize lọc thuộc tính};
+\node[phucvu, right=15mm of usb] (worker)
+  {\textbf{CameraWorker}\\\scriptsize một luồng mỗi camera};
+\node[xuly, right=17mm of worker, yshift=13mm] (yolo)
+  {YOLOv8n\\\scriptsize phát hiện};
+\node[xuly, below=of yolo] (track)
+  {ByteTrack\\\scriptsize bám vết};
+\node[xuly, below=of track] (dem)
+  {Bộ đếm\\\scriptsize vạch / vùng};
+\node[xuly, left=9mm of dem] (la3b)
+  {LA-3B\\\scriptsize lọc thuộc tính};
 \begin{scope}[on background layer]
   \node[khoi, fit=(yolo)(track)(dem)(la3b),
         label={[font=\scriptsize\bfseries]above:Xử lý ảnh}] (gXuLy) {};
 \end{scope}
 
 % ── Đầu ra ──
-\node[hop, right=14mm of yolo]  (dem_buf) {Bộ đệm khung hình\\\scriptsize khung mới nhất};
-\node[hop, below=8mm of dem_buf] (ghi)    {Ghi hình\\\scriptsize đoạn 60 giây};
-\node[hop, below=8mm of ghi]     (csdl)   {SQLite (WAL)\\\scriptsize sự kiện, số đếm};
+\node[daura, right=20mm of yolo] (dem_buf)
+  {Bộ đệm khung hình\\\scriptsize khung mới nhất};
+\node[daura, right=20mm of dem] (ghi)
+  {Ghi hình\\\scriptsize đoạn 60 giây};
+\node[daura, below=of ghi] (csdl)
+  {SQLite (WAL)\\\scriptsize sự kiện, số đếm};
 
 % ── Tầng phục vụ ──
-\node[hopnhan, right=14mm of ghi] (api) {\textbf{FastAPI}\\\scriptsize 38 điểm cuối};
-\node[hop, above=8mm of api] (mjpeg) {Luồng MJPEG\\\scriptsize \code{multipart}};
-\node[hop, below=8mm of api] (react) {Giao diện React\\\scriptsize trình duyệt};
+\node[phucvu, right=15mm of ghi] (api)
+  {\textbf{FastAPI}\\\scriptsize 40 điểm cuối};
+\node[daura] (mjpeg) at (api |- dem_buf)
+  {Luồng MJPEG\\\scriptsize \code{multipart}};
+\node[daura] (react) at (api |- csdl)
+  {Giao diện React\\\scriptsize trình duyệt};
 
 \draw[mui] (rtsp.east)  -- (worker.west);
 \draw[mui] (usb.east)   -- (worker.west);
@@ -53,20 +78,23 @@ thay giao diện mà không đụng tới phần xử lý, và ngược lại.
 \draw[mui] (worker) -- node[nhanmui, above, sloped] {khung hình} (yolo);
 \draw[mui] (yolo)  -- (track);
 \draw[mui] (track) -- (dem);
-\draw[muimo] (track) -- node[nhanmui, right] {luồng TM} (la3b);
+\draw[muimo] (track.south west) -- node[nhanmui, left, sloped] {luồng TM} (la3b.north);
 \draw[mui] (yolo.east)  -- node[nhanmui, above] {đã vẽ} (dem_buf.west);
-\draw[mui] (dem.east)   -- (ghi.west);
-\draw[mui] (dem.east)   -- (csdl.west);
-\draw[mui] (dem_buf.east) -| (mjpeg.north);
-\draw[mui] (csdl.east)  -- (api.west);
-\draw[mui] (ghi.east)   -- (api.west);
+\draw[mui] (dem.east) -- (ghi.west);
+\draw[mui] (dem.south east) -- (csdl.west);
+\draw[mui] (dem_buf.east) -- (mjpeg.west);
+\draw[mui] (ghi.east) -- (api.west);
+\draw[mui] (csdl.north east) -- ++(4mm,4mm)
+  -- ([yshift=-3mm]api.south west) -- (api.south west);
 \draw[mui] (mjpeg.south) -- (api.north);
-\draw[mui] (api) -- node[nhanmui, right] {JSON} (react);
+\draw[mui] (api.south) -- node[nhanmui, right] {JSON} (react.north);
 \end{tikzpicture}
+\end{adjustbox}
 \caption{Kiến trúc hệ thống. Mỗi camera chiếm một luồng xử lý riêng, kết quả đẩy
 vào bộ đệm khung hình để tầng HTTP đọc mà không phải chờ.}
 \label{fig:kientruc}
 \end{figure}
+
 
 Bên trong máy chủ, mỗi camera được cấp một luồng riêng chạy vòng lặp: đọc khung
 hình, phát hiện đối tượng, bám vết, kiểm tra vượt vạch, vẽ chú thích, rồi ghi kết
@@ -74,67 +102,68 @@ quả vào bộ đệm. Tầng HTTP không bao giờ gọi trực tiếp vào ca
 JPEG mới nhất trong bộ đệm đó. Một camera bị treo hay mất mạng vì thế không làm
 đứng cả API.
 
-\section{Luồng hoạt động đầu--cuối}
-\label{sec:luonghoatdong}
+\subsection{Đường đi của một khung hình}
+\label{sub:chinbuoc}
 
-Các mục sau mô tả từng thành phần một cách độc lập. Mục này đi theo chiều ngược lại:
-bám theo \emph{một khung hình} từ lúc rời khỏi camera đến lúc người dùng nhìn thấy kết
-quả, để thấy các thành phần nối vào nhau ở đâu.
+Sơ đồ dưới đây bám theo một khung hình từ lúc được đọc khỏi nguồn video đến khi
+được phát tới trình duyệt.
 
-\subsection{Chín bước của một khung hình}
+\begin{figure}[H]
+\centering
+\begin{adjustbox}{max width=\textwidth}
+\begin{tikzpicture}[
+  node distance=8mm and 7mm,
+  buoc/.style={hop, text width=4.1cm, minimum height=1.75cm,
+               font=\scriptsize, inner sep=5pt}
+]
+\node[buoc] (b1) {\textbf{1. Đọc khung hình}\\
+  Gọi \code{cap.read()}; phát lại tệp hoặc kết nối lại nguồn mạng sau 3--60 giây.};
+\node[buoc, right=of b1] (b2) {\textbf{2. Phát hiện}\\
+  Chạy YOLOv8n một lần với hợp lớp và ngưỡng thấp nhất của mọi pipeline.};
+\node[buoc, right=of b2] (b3) {\textbf{3. Bám vết}\\
+  Mỗi pipeline lọc hộp và dùng một bộ ByteTrack riêng để gán mã vết.};
 
-\begin{enumerate}[leftmargin=*, itemsep=3pt]
-  \item \textbf{Đọc.} Luồng riêng của camera gọi \code{cap.read()}. Nguồn là tệp thì
-        hết video sẽ phát lại từ đầu và đặt lại số đếm; nguồn là mạng thì mất tín hiệu
-        sẽ chuyển sang vòng thử lại có giãn cách tăng dần từ 3 đến 60 giây.
+\node[buoc, below=of b3] (b4) {\textbf{4. Lọc thuộc tính}\\
+  Luồng Thông minh đưa hộp mới sang LA-3B chạy nền và lưu kết quả theo mã vết.};
+\node[buoc, left=of b4] (b5) {\textbf{5. Đếm}\\
+  Làm mượt điểm neo, đối chiếu vạch hoặc vùng và xác nhận chiều qua ba khung.};
+\node[buoc, left=of b5] (b6) {\textbf{6. Ghi nhận}\\
+  Lưu sự kiện, ảnh chụp vào \code{events} và cập nhật số đếm trong \code{counts}.};
 
-  \item \textbf{Phát hiện.} Khung hình đưa qua YOLOv8n \emph{đúng một lần}, dù camera
-        đang chạy bao nhiêu pipeline. Tham số truyền vào là hợp của mọi lớp đối tượng
-        và ngưỡng tin cậy thấp nhất trong số các pipeline — chi tiết ở
-        Mục~\ref{sec:chungphathien}.
+\node[buoc, below=of b6] (b7) {\textbf{7. Vẽ chú thích}\\
+  Vẽ hộp, vạch, mũi tên và số đếm lên bản sao; giữ nguyên khung hình gốc.};
+\node[buoc, right=of b7] (b8) {\textbf{8. Ghi hình}\\
+  Ghi khung đã chú thích vào MP4; đóng và lưu mỗi đoạn 60 giây trong \code{segments}.};
+\node[buoc, right=of b8] (b9) {\textbf{9. Phát ra ngoài}\\
+  Đặt khung mới nhất vào bộ đệm một ô để tầng HTTP phát tới trình duyệt bằng MJPEG.};
 
-  \item \textbf{Bám vết.} Mỗi pipeline lọc lại tập hộp theo lớp và ngưỡng của riêng nó,
-        rồi đưa qua bộ ByteTrack \emph{riêng}. Mã định danh vết phải độc lập vì hai
-        pipeline đếm hai vạch khác nhau không được chia nhau trạng thái bám.
+\draw[mui] (b1) -- (b2);
+\draw[mui] (b2) -- (b3);
+\draw[mui] (b3) -- (b4);
+\draw[mui] (b4) -- (b5);
+\draw[mui] (b5) -- (b6);
+\draw[mui] (b6) -- (b7);
+\draw[mui] (b7) -- (b8);
+\draw[mui] (b8) -- (b9);
+\end{tikzpicture}
+\end{adjustbox}
+\caption{Đường đi của một khung hình qua chín bước xử lý. Bước 4 chỉ áp dụng
+cho pipeline ở chế độ Thông minh.}
+\label{fig:chin-buoc-khung-hinh}
+\end{figure}
 
-  \item \textbf{Lọc thuộc tính} (chỉ luồng Thông minh). Các hộp chưa từng được phán
-        quyết bị cắt ra, xếp hàng đưa sang LA-3B chạy trên luồng nền. Kết quả lưu vào
-        bộ nhớ đệm theo mã vết nên mỗi vết chỉ tốn một lần hỏi.
-
-  \item \textbf{Đếm.} Điểm neo bàn chân của từng vết được làm mượt qua mười khung, đối
-        chiếu với vạch hoặc vùng. Vượt ra ngoài dải đệm và giữ nguyên phía mới trong ba
-        khung liên tiếp thì tính một lượt.
-
-  \item \textbf{Ghi nhận.} Lượt vượt vạch sinh một bản ghi trong bảng \code{events} kèm
-        ảnh chụp thời điểm đó. Số đếm dồn được đẩy định kỳ vào bảng \code{counts} chứ
-        không ghi mỗi khung, tránh làm phình cơ sở dữ liệu.
-
-  \item \textbf{Vẽ chú thích.} Hộp giới hạn, vạch, mũi tên chiều và bảng số được vẽ lên
-        một \emph{bản sao} của khung hình. Bản gốc vẫn giữ nguyên vì màn cấu hình cần
-        khung hình sạch để người dùng vẽ vạch mới.
-
-  \item \textbf{Ghi hình.} Khung đã vẽ chú thích được ghi vào tệp MP4 của đoạn 60 giây
-        đang mở. Hết đoạn thì đóng tệp, mở đoạn mới và ghi bản ghi vào \code{segments}.
-
-  \item \textbf{Phát ra ngoài.} Khung đã vẽ được đặt vào bộ đệm một ô. Tầng HTTP đọc từ
-        đó và đẩy sang trình duyệt dưới dạng MJPEG.
-\end{enumerate}
-
-\subsection{Vì sao dùng bộ đệm một ô}
+\subsection{Tách việc xử lý khỏi việc hiển thị}
 
 Bước 9 là chỗ dễ mắc lỗi nhất trong toàn bộ chuỗi. Nếu tầng HTTP đọc thẳng từ camera
-thì tốc độ xử lý bị buộc vào tốc độ của trình duyệt chậm nhất đang xem — mở thêm một
+thì tốc độ xử lý bị buộc vào tốc độ của trình duyệt chậm nhất đang xem --- mở thêm một
 tab là số đếm chậm lại theo.
 
 Bộ đệm một ô cắt đứt ràng buộc đó: luồng camera luôn \emph{ghi đè} khung mới nhất mà
 không chờ ai, còn tầng HTTP luôn đọc được khung mới nhất mà không chặn ai. Trình duyệt
-chậm chỉ nhận được ít khung hơn, chứ không làm chậm việc đếm.
-
-Đánh đổi là trình duyệt có thể bỏ qua vài khung hình. Với việc theo dõi trực tiếp thì
-điều đó không quan trọng — số đếm và sự kiện vẫn tính trên toàn bộ khung hình, chỉ phần
-hiển thị bị thưa đi.
-
-\subsection{Hai đường đọc dữ liệu}
+chậm chỉ nhận được ít khung hơn, chứ không làm chậm việc đếm. Đánh đổi là trình duyệt
+có thể bỏ qua vài khung hình --- với việc theo dõi trực tiếp thì điều đó không quan
+trọng, vì số đếm và sự kiện vẫn tính trên toàn bộ khung hình, chỉ phần hiển thị bị
+thưa đi.
 
 Người dùng lấy dữ liệu ra theo hai đường tách biệt, không đường nào đi qua luồng
 camera:
@@ -174,8 +203,7 @@ def run(self):
             self._stop_event.wait(config.RECONNECT_DELAY_S)
 \end{lstlisting}
 
-Dùng \code{Event.wait()} thay cho \code{time.sleep()} là một chi tiết nhỏ nhưng
-quan trọng: khi người dùng bấm tắt camera, luồng thoát ngay thay vì phải đợi hết
+Dùng \code{Event.wait()} thay cho \code{time.sleep()} : khi người dùng bấm tắt camera, luồng thoát ngay thay vì phải đợi hết
 khoảng chờ ba giây.
 
 Hệ thống nhận ba loại nguồn. Chuỗi toàn chữ số hiểu là chỉ số webcam, chuỗi bắt
@@ -197,24 +225,28 @@ video.
 
 Chuỗi xử lý mỗi khung hình gồm bốn bước: suy luận YOLO với ngưỡng tin cậy cấu
 hình được, khử hộp trùng bằng NMS, loại hộp có diện tích dưới ngưỡng, rồi đưa qua
-ByteTrack để gán mã định danh.
+ByteTrack để gán mã định danh. Ngưỡng IoU của NMS đặt ở 0{,}5 thay vì giá trị
+thấp hơn thường thấy: ở cảnh đông, hai người đứng sát nhau tạo ra hai hộp chồng
+lấn khá nhiều, ngưỡng quá gắt sẽ gộp họ thành một.
 
-Ngưỡng IoU của NMS đặt ở 0{,}5 thay vì giá trị thấp hơn thường thấy. Ở cảnh đông,
-hai người đứng sát nhau tạo ra hai hộp chồng lấn khá nhiều; ngưỡng quá gắt sẽ gộp
-họ thành một.
-
-\subsection{Dùng chung một lần phát hiện cho nhiều pipeline}
+\subsection{Chạy nhiều bài toán trên cùng một camera}
 \label{sec:chungphathien}
 
-Khi một camera chạy nhiều pipeline, cách làm hiển nhiên là mỗi pipeline tự gọi YOLO
-trên khung hình của mình. Cách đó sai về chi phí: bốn pipeline trên một camera thành
-bốn lần suy luận cho \emph{cùng một khung hình}, trong khi bản thân phép suy luận không
-phụ thuộc gì vào cấu hình của pipeline.
+
+Về phía chạy, mỗi pipeline cần bộ bám vết, bộ đếm, bộ lọc Thông minh và lịch chạy
+riêng; dùng chung sẽ lẫn số đếm và lẫn mã định danh vết. Toàn bộ những thứ đó được gom
+vào lớp \code{PipelineRuntime}, còn \code{CameraWorker} giữ một danh sách các runtime
+thay vì một bộ biến đơn lẻ.
+
+Điểm phải cân nhắc là chi phí GPU. Cách làm hiển nhiên --- mỗi pipeline tự gọi YOLO
+trên khung hình của mình --- sai về chi phí: bốn pipeline trên một camera thành bốn lần
+suy luận cho \emph{cùng một khung hình}, trong khi GPU vốn là nút thắt của hệ thống.
 
 Điều then chốt là YOLO tính toàn bộ 80 lớp COCO trong một lần lan truyền xuôi; tham số
-\code{classes} chỉ lọc ở đầu ra chứ không làm mạng chạy nhẹ đi. Đo được: phát hiện sáu
-lớp chỉ tốn hơn phát hiện một lớp \textbf{2{,}5\%} thời gian. Nói cách khác, thông tin
-mà pipeline thứ hai cần đã nằm sẵn trong kết quả của pipeline thứ nhất.
+\code{classes} chỉ lọc ở đầu ra chứ không làm mạng chạy nhẹ đi. Đo được trên cùng một
+đoạn video: phát hiện \textbf{sáu lớp} tốn 3{,}17\,s, phát hiện \textbf{một lớp} tốn
+3{,}25\,s --- chênh \textbf{2{,}5\%}, nằm trong sai số. Nói cách khác, thông tin mà
+pipeline thứ hai cần đã nằm sẵn trong kết quả của pipeline thứ nhất.
 
 Vì vậy phép phát hiện được tách khỏi phép bám vết:
 
@@ -234,20 +266,28 @@ class Detector:
 Luồng camera gọi \code{detect()} một lần với \textbf{hợp} các lớp và ngưỡng tin cậy
 \textbf{thấp nhất} của mọi pipeline đang chạy, rồi mỗi pipeline gọi \code{track()} để
 lọc lại theo cấu hình riêng. Lấy hợp và ngưỡng thấp nhất là bắt buộc: thiếu một lớp
-hoặc đặt ngưỡng cao hơn của pipeline nào đó thì pipeline ấy mất dữ liệu đầu vào.
+hoặc đặt ngưỡng cao hơn của pipeline nào đó thì pipeline ấy mất dữ liệu đầu vào. Chi
+phí GPU nhờ vậy không tăng theo số pipeline.
 
 Thay đổi này được kiểm chứng là \emph{không làm đổi kết quả}: chạy đối chứng 160 khung
 hình với 4828 hộp giới hạn, bản cũ và bản mới cho ra kết quả giống hệt nhau ở từng hộp.
 Đây là điều bắt buộc phải chứng minh khi tái cấu trúc phần tính toán --- nhanh hơn mà
 đổi kết quả thì không còn là tái cấu trúc nữa.
 
-\subsection{Nối tiếp các lần suy luận trên GPU dùng chung}
+Hai chi tiết còn lại thuộc về phía hiển thị và phía tạo lập. Ở màn giám sát, vẽ chồng
+kết quả của mọi pipeline lên một khung hình sẽ rối, nên mỗi pipeline giữ bản vẽ riêng
+và ô camera có nút chuyển qua lại; luồng video nhận thêm tham số \code{pipeline\_id}.
+Chiều ngược lại --- một lần tạo cho nhiều camera --- không cần đổi lược đồ cơ sở dữ
+liệu: trình hướng dẫn cho tick nhiều camera rồi sinh ra mỗi camera một pipeline độc
+lập, cùng tham số nhưng số đếm tách bạch. Riêng hình vẽ bắt buộc phải làm cho từng
+camera, vì vạch đặt trên khung hình camera này không có ý nghĩa gì trên camera khác.
+
+\subsection{Khi nhiều camera dùng chung một GPU}
 \label{sec:khoagpu}
 
 Mỗi camera một luồng, mà tất cả dùng chung một thiết bị tính toán. Trên nền Metal của
-Apple, thư viện PyTorch \emph{không an toàn khi gọi từ nhiều luồng} --- hai luồng cùng
+Apple, thư viện PyTorch không an toàn khi gọi từ nhiều luồng - hai luồng cùng
 gọi suy luận làm tiến trình chết ngay lập tức, không để lại vết trong nhật ký ứng dụng.
-Sự cố này và cách truy nguyên được thuật lại ở Mục~\ref{sec:loi-sigsegv}.
 
 Cách khắc phục là một khoá bao quanh mọi lần suy luận, chỉ bật khi thiết bị là Metal:
 
@@ -270,25 +310,19 @@ toàn thay vì ngầm định và gây sập.
 \subsection{Hiệu chỉnh tham số ByteTrack}
 \label{sec:bytetrack}
 
-Tham số \code{minimum\_matching\_threshold} của ByteTrack áp lên chi phí
-$1 - \text{IoU}$ chứ không phải lên IoU. Đây là chỗ dễ hiểu nhầm nhất. Đặt ngưỡng
-$0{,}3$ nghĩa là đòi hỏi $\text{IoU} \geq 0{,}7$ giữa hai khung hình liên tiếp
-mới chấp nhận nối vết --- một yêu cầu rất khắt khe. Ở cảnh đông người, hầu như
-không cặp hộp nào đạt được, kết quả là mọi vết chết ngay sau một khung hình và hệ
-thống không đếm được gì.
+Ngưỡng \code{minimum\_matching\_threshold} áp lên chi phí $1 - \mathrm{IoU}$ chứ không
+phải lên IoU, như đã phân tích ở Mục~\ref{sub:bamvet-lythuyet}. Hệ thống đặt giá trị
+$0{,}9$ (tương ứng $\mathrm{IoU} \geq 0{,}1$), đi kèm \code{lost\_track\_buffer} bằng
+50 khung hình để giữ vết qua các đoạn bị che khuất ngắn. Số liệu cho năm giá trị ngưỡng
+nằm ở Bảng~\ref{tab:bytetrack}, Chương~\ref{ch:ketqua}: ở $0{,}3$, hai người trong cảnh
+sinh ra 65 mã định danh với độ dài vết trung vị đúng hai khung hình.
 
-Giá trị $0{,}9$ (tương ứng $\text{IoU} \geq 0{,}1$) khiến vết sống lâu hơn hẳn.
-Đi kèm là \code{lost\_track\_buffer} đặt ở 50 khung hình để giữ vết qua các đoạn
-bị che khuất ngắn.
+Luồng Thông minh dùng một bộ tham số ByteTrack riêng, giữ vết lâu hơn nữa, vì lý do
+trình bày ở Mục~\ref{sec:thongminh}: mỗi lần đổi mã định danh là một lần phải hỏi lại
+mô hình thị giác--ngôn ngữ.
 
-Số liệu thực nghiệm cho năm giá trị ngưỡng nằm ở Bảng~\ref{tab:bytetrack},
-Chương~\ref{ch:ketqua}.
-
-\section{Thuật toán đếm qua vạch}
+\section{Thuật toán đếm}
 \label{sec:dem}
-
-Đây là phần chiếm nhiều thời gian nhất của kỳ thực tập, và cũng là phần phải làm
-lại nhiều lần nhất.
 
 \subsection{Hạn chế của cách đếm sẵn có}
 
@@ -299,13 +333,13 @@ tình huống thường gặp.
 Tình huống thứ nhất là người đi thẳng về phía camera. Hộp giới hạn to dần khi
 người tiến lại gần, và tâm hộp dao động lên xuống theo nhịp bước chân. Mỗi lần
 dao động vắt qua vạch là một lượt đếm. Hai người đi qua có thể cho kết quả bốn
-lượt.
+lượt --- số đo đầy đủ ở Bảng~\ref{tab:anchor}.
 
 Tình huống thứ hai là ByteTrack đổi mã định danh giữa chừng do che khuất. Vết cũ
 biến mất, vết mới sinh ra ở gần đó nhưng không còn lịch sử để biết nó đang ở phía
 nào của vạch.
 
-\subsection{Ba cải tiến của \code{CentroidCrossingCounter}}
+\subsection{Ba cải tiến của bộ đếm}
 
 \textbf{Điểm neo là bàn chân.} Thay vì tâm hộp, thuật toán lấy điểm giữa cạnh đáy
 --- xấp xỉ vị trí bàn chân chạm đất. Điểm này di chuyển đơn điệu theo hướng đi và
@@ -318,18 +352,22 @@ def _anchor_pt(self, box):
     return np.array([cx, cy], dtype=float)
 \end{lstlisting}
 
+Dấu của khoảng cách có hướng từ điểm neo tới đường thẳng chứa vạch --- công
+thức~\eqref{eq:khoangcach} --- cho biết đối tượng đang ở nửa nào. Chuyển từ $d < 0$
+sang $d > 0$ tính là một chiều, ngược lại là chiều kia. Quy ước nào là Vào thì phụ
+thuộc cách vẽ vạch, và người dùng không đoán được, nên hệ thống vẽ sẵn hai mũi tên ngay
+giữa vạch trên mọi khung hình: mũi tên xanh chỉ về phía tính là Vào, mũi tên đỏ chỉ
+phía Ra. Nếu ngược ý, một công tắc trong giao diện đảo lại cả số đếm lẫn hướng mũi tên.
+
 \textbf{Vùng đệm và độ trễ xác nhận.} Quanh vạch có một dải đệm rộng bằng 3\% chiều
 cao hộp giới hạn của chính đối tượng đang xét. Đối tượng nằm trong dải này chưa
 được coi là đã sang phía bên kia. Khi vượt ra ngoài dải, phía mới còn phải giữ
-nguyên trong ít nhất ba khung hình liên tiếp thì mới tính là một lượt. Hai cơ chế
-này cùng chặn các dao động nhỏ quanh vạch.
-
-Vị trí dùng để xét không phải toạ độ tức thời mà là trung bình trượt của mười
-khung hình gần nhất, giúp làm mượt thêm một lần nữa.
+nguyên trong ít nhất ba khung hình liên tiếp thì mới tính là một lượt. Vị trí dùng
+để xét cũng không phải toạ độ tức thời mà là trung bình trượt của mười khung hình
+gần nhất, giúp làm mượt thêm một lần nữa.
 
 Đơn vị của dải đệm là chiều cao đối tượng chứ không phải chiều dài vạch. Cách chọn
-đơn vị này là kết quả của một lỗi phải sửa về sau, trình bày ở
-Mục~\ref{sec:loi-vungdem}: lấy theo chiều dài vạch thì cùng một lượt đi qua lại
+đơn vị này tránh việc cùng một lượt đi qua lại
 được đếm hay bị bỏ tuỳ vào việc người dùng kéo vạch dài hay ngắn, điều không có
 căn cứ vật lý nào. Lấy theo chiều cao đối tượng thì thang đo tự khớp với phối
 cảnh: người ở xa hộp nhỏ nên dải đệm hẹp, người ở gần hộp to nên dải đệm rộng.
@@ -365,28 +403,12 @@ Thêm vào đó là khoảng nghỉ 20 khung hình sau mỗi lượt đếm cho 
 điều kiện hình chiếu của điểm neo phải nằm trong phạm vi đoạn vạch chứ không phải
 trên phần kéo dài vô hạn của nó.
 
-\subsection{Xác định chiều Vào và Ra}
-
-Vạch chia mặt phẳng làm hai nửa. Dấu của khoảng cách có hướng từ điểm neo tới
-đường thẳng chứa vạch cho biết đối tượng đang ở nửa nào:
-
-\[
-d = \frac{v_x \,(p_y - a_y) - v_y \,(p_x - a_x)}{\lVert v \rVert}
-\]
-
-trong đó $a$ là điểm đầu vạch, $v$ là vector chỉ phương, $p$ là điểm neo. Chuyển
-từ $d < 0$ sang $d > 0$ tính là một chiều, ngược lại là chiều kia.
-
-Quy ước nào là Vào thì phụ thuộc cách vẽ vạch, và người dùng không đoán được. Hệ
-thống vẽ sẵn hai mũi tên ngay giữa vạch trên mọi khung hình, mũi tên xanh chỉ về
-phía tính là Vào, mũi tên đỏ chỉ phía Ra. Nếu ngược ý, một công tắc trong giao
-diện đảo lại cả số đếm lẫn hướng mũi tên.
 
 \subsection{Đếm trong vùng đa giác}
 
-Vạch thẳng trả lời câu hỏi "bao nhiêu lượt đi qua". Có những tình huống cần câu trả
-lời khác: "hiện có bao nhiêu người trong khu vực chờ", "đã có bao nhiêu người bước vào
-khu vực hạn chế". Lớp \code{PolygonZoneCounter} phụ trách phần này.
+Vạch thẳng trả lời câu hỏi ``bao nhiêu lượt đi qua''. Có những tình huống cần câu trả
+lời khác: ``hiện có bao nhiêu người trong khu vực chờ'', ``đã có bao nhiêu người bước
+vào khu vực hạn chế''. Lớp \code{PolygonZoneCounter} phụ trách phần này.
 
 Kiểm tra một điểm có nằm trong đa giác hay không dùng \code{cv2.pointPolygonTest}, hàm
 này xử lý được cả đa giác lõm. Hai nguyên tắc của bộ đếm vạch được giữ nguyên: điểm neo
@@ -399,38 +421,35 @@ vào, và ở biên vùng thì trạng thái sẽ nhấp nháy liên tục.
 
 Bộ đếm giữ hai con số: số đối tượng \emph{đang} ở trong vùng, và tổng số lượt \emph{đã}
 bước vào. Con số thứ hai dùng tập \code{entered} để một người ra rồi vào lại không bị
-đếm thành hai lượt.
+đếm thành hai lượt. Người dùng vẽ vùng bằng cách bấm lần lượt từng đỉnh trên ảnh chụp
+từ camera, kéo đỉnh để chỉnh; không giới hạn số đỉnh, chỉ yêu cầu tối thiểu ba.
 
-Người dùng vẽ vùng bằng cách bấm lần lượt từng đỉnh trên ảnh chụp từ camera, kéo đỉnh
-để chỉnh. Không giới hạn số đỉnh, chỉ yêu cầu tối thiểu ba.
+\subsection{Chọn vị trí và hướng vạch}
+\label{sub:datvach}
 
-Ở giao diện, đếm qua vạch và đếm trong vùng \emph{không} là hai lựa chọn tách rời.
-Người dùng chỉ chọn "Đếm đối tượng", rồi kiểu hình vẽ ở bước sau mới quyết định thuật
-toán nào chạy. Với người vận hành thì đây vốn là cùng một việc; tách thành hai mục
-buộc họ phải hiểu trước sự khác nhau giữa hai thuật toán mới chọn được, trong khi nhìn
-khung hình rồi vẽ thì tự khắc rõ.
+Vị trí vạch quyết định độ chính xác mạnh hơn mọi tham số khác của hệ thống, nên phần
+này đáng được nói tách ra. Ba quy tắc rút ra từ số liệu ở Mục~\ref{sec:mot17}:
 
-Khung vẽ cũng không dựng sẵn hình nào. Bản trước đặt sẵn một vạch ngang giữa khung cho
-tiện, nhưng như vậy người dùng bấm "Tiếp tục" là qua luôn mà không để ý, và pipeline
-chạy với vạch đặt sai chỗ. Giờ chưa vẽ thì nút đi tiếp bị khoá, khung hình phủ mờ kèm
-lời nhắc.
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item \textbf{Vạch phải cắt vuông góc với hướng đi trội.} Trên 70\% số vết đi một
+        hướng thì đặt vạch vuông góc với hướng đó. Đặt sai mất khoảng 0{,}3 điểm F1 ---
+        lớn hơn mọi tinh chỉnh tham số khác đã thử.
+  \item \textbf{Vạch phải nằm đúng chỗ bàn chân bước qua}, thường thấp hơn giữa khung
+        hình. Người đi thẳng vào hoặc ra theo trục camera là trường hợp khó vì họ không
+        cắt vạch một cách dứt khoát.
+  \item \textbf{Mọi người nên qua vạch ở khoảng cách tương đương tới camera.} Vạch chạy
+        dọc theo hành lang khiến một chiều luôn xảy ra ở vùng xa camera, nơi người nhỏ
+        và dễ bị bỏ sót, nên sai lệch dồn hết về chiều đó.
+\end{itemize}
 
-\subsection{Đặt vạch ở đâu}
-
-Người đi cắt ngang tầm nhìn camera cho kết quả đếm ổn định nhất. Người đi thẳng
-vào hoặc ra theo trục camera là trường hợp khó, vì họ không cắt vạch một cách dứt
-khoát. Với bố trí này, vạch nên đặt đúng chỗ bàn chân bước qua, thường thấp hơn
-giữa khung hình.
-
-Người đi song song với vạch không bị đếm, vì họ không đổi phía và dải đệm chặn
-các trôi dạt nhỏ.
+Người đi song song với vạch không bị đếm, vì họ không đổi phía và dải đệm chặn các trôi
+dạt nhỏ. Đây là hành vi đúng, không phải khiếm khuyết.
 
 \section{Luồng Thông minh: lọc đối tượng bằng mô tả tiếng Việt}
 \label{sec:thongminh}
 
 YOLO chỉ biết 80 lớp đối tượng của bộ dữ liệu COCO. Muốn đếm riêng \emph{người mặc áo
-đỏ} hay \emph{người đeo ba lô} thì bình thường phải gán nhãn và huấn luyện lại --- việc
-chiếm gần hết quỹ thời gian của một kỳ thực tập.
+đỏ} hay \emph{người đeo ba lô} thì bình thường phải gán nhãn và huấn luyện lại 
 
 Luồng Thông minh giải quyết bằng cách ghép hai mô hình. YOLO vẫn phụ trách tìm người,
 còn LocateAnything-3B (LA-3B) --- một mô hình thị giác--ngôn ngữ --- nhận từng khung cắt
@@ -464,24 +483,21 @@ Trung nên không hiểu tiếng Việt: đưa thẳng câu tiếng Việt vào 
 như mọi khung cắt, tức là không lọc gì cả.
 
 Hệ thống dịch bằng từ điển chốt cứng cho các vật thể hay gặp, phần còn lại giao cho mô
-hình Opus-MT. Từ điển cần thiết vì mô hình dịch sai một số từ ngắn --- chẳng hạn "ô"
+hình Opus-MT. Từ điển cần thiết vì mô hình dịch sai một số từ ngắn --- chẳng hạn ``ô''
 thành \en{pane} thay vì \en{umbrella}. Bản dịch được nhớ lại nên mỗi câu lệnh chỉ dịch
-đúng một lần.
+đúng một lần. Cách diễn đạt truy vấn có ảnh hưởng lớn tới chất lượng lọc, đo được ở
+Mục~\ref{sec:thongminh-ketqua}.
 
-Câu lệnh chỉ là "người" sẽ được nhận ra và bỏ qua LA-3B hoàn toàn, vì YOLO đã làm được
+Câu lệnh chỉ là ``người'' sẽ được nhận ra và bỏ qua LA-3B hoàn toàn, vì YOLO đã làm được
 việc đó nhanh hơn nhiều.
 
-\subsection{Bài toán tốc độ}
+\subsection{Giữ tốc độ khi mô hình chậm}
 
 LA-3B mất khoảng một giây cho mỗi khung cắt, trong khi vòng lặp camera chạy 15 khung
 hình mỗi giây. Gọi trực tiếp trong vòng lặp sẽ làm luồng video đứng hình hoàn toàn.
 
-Ba cơ chế được dùng cùng lúc:
-
 \textbf{Hỏi một lần cho mỗi vết.} Phán quyết lưu theo mã định danh. Một người xuất hiện
-trong 300 khung hình chỉ tốn đúng một lần gọi LA-3B. Đây là lý do luồng Thông minh dùng
-bộ tham số ByteTrack riêng, giữ vết lâu hơn: mỗi lần đổi mã định danh là một lần phải
-hỏi lại.
+trong 300 khung hình chỉ tốn đúng một lần gọi LA-3B.
 
 \textbf{Gọi bất đồng bộ.} Một luồng phụ xử lý hàng đợi khung cắt; vòng lặp chính đẩy
 khung cắt vào hàng đợi rồi đi tiếp ngay.
@@ -506,23 +522,21 @@ if tid in self.pending:
 Khi luồng phụ trả về kết quả khớp, các lượt đã đệm được cộng bù vào bộ đếm; nếu không
 khớp thì bỏ đi.
 
-\subsection{Nạp mô hình}
-
-Repo gốc của LA-3B viết cho một phiên bản thư viện cũ hơn nên phải vá ba chỗ trước khi
-nạp được: bổ sung vài khoá thiếu trong \code{config.json}, trỏ tạm kiến trúc
+Về phía nạp mô hình: repo gốc của LA-3B viết cho một phiên bản thư viện cũ hơn nên phải
+vá ba chỗ --- bổ sung vài khoá thiếu trong \code{config.json}, trỏ tạm kiến trúc
 \code{qwen3} sang \code{qwen2} vì checkpoint thực chất là Qwen2, và tạo module rỗng cho
-\code{decord} với \code{lmdb} --- hai thư viện chỉ dùng cho nhánh xử lý video mà hệ
-thống này không đụng tới.
-
-Việc nạp là lazy, chỉ chạy khi có pipeline Thông minh được kích hoạt. Nếu không tìm thấy
-mô hình, giao diện khoá chế độ Thông minh lại kèm hướng dẫn, phần còn lại vẫn hoạt động
-bình thường.
+\code{decord} với \code{lmdb}. Việc nạp là lazy, chỉ chạy khi có pipeline Thông minh
+được kích hoạt; nếu không tìm thấy mô hình, giao diện khoá chế độ Thông minh lại kèm
+hướng dẫn, phần còn lại vẫn hoạt động bình thường.
 
 \section{Tham số vận hành của pipeline}
 \label{sec:thamso}
 
 Ngoài hình vẽ và lớp đối tượng, mỗi pipeline còn có một nhóm tham số cho người vận
-hành tự chỉnh mà không cần đụng tới mã nguồn.
+hành tự chỉnh mà không cần đụng tới mã nguồn. Hai luồng có hai bộ tham số khác nhau,
+và khác nhau nhiều hơn vẻ ngoài gợi ý.
+
+\subsection{Luồng Tiêu chuẩn}
 
 \textbf{Hướng đếm} giới hạn chiều được ghi nhận. Lọc ngay trong bộ đếm chứ không lọc
 danh sách sự kiện trả về; nếu lọc ở khâu sau thì con số hiển thị trên màn hình vẫn
@@ -546,31 +560,42 @@ dụ chỉ đếm khách trong giờ mở cửa. Ngoài khung giờ, camera vẫ
 hình --- chỉ phần nhận diện tạm nghỉ. Cách này vừa tiết kiệm tài nguyên vừa không tạo
 ra số liệu rác lúc cửa hàng đóng, mà vẫn giữ được dữ liệu để xem lại nếu có việc.
 
-Ngày trong tuần đánh số theo cách gọi của người Việt, thứ Hai là 2 cho tới Chủ nhật là
-8, thay vì 0--6 như Python. Dữ liệu lưu xuống nhờ vậy đọc lên khớp luôn với nhãn hiển
-thị, khỏi phải quy đổi ở hai đầu.
 
-Trường hợp cần chú ý là khung giờ vắt qua nửa đêm, chẳng hạn 22:00 đến 06:00. Phần sau
-nửa đêm thuộc về ngày hôm sau nên khi kiểm tra phải đối chiếu với danh sách ngày của
-\emph{hôm trước}; nếu chỉ so với ngày hiện tại thì ca đêm sẽ bị cắt đúng lúc 0 giờ.
+\textbf{Một lỗi đo tốc độ.} Khi kiểm thử nhóm tham số này, đặt nhịp 10 khung hình mỗi
+giây nhưng màn hình vẫn báo 26. Nguyên nhân nằm ở cách đo: đoạn mã cũ tính tốc độ bằng
+nghịch đảo \emph{thời gian xử lý một khung hình}, tức là đo năng lực tối đa của máy chứ
+không phải nhịp chạy thật, vì phần thời gian vòng lặp chủ động nghỉ không được tính
+vào. Chừng nào nhịp mục tiêu còn là một hằng số chôn trong mã thì sai lệch này không ai
+thấy; nhưng khi người dùng tự đặt nhịp, con số hiển thị mâu thuẫn trực tiếp với con số
+họ vừa nhập. Cách sửa là đo khoảng cách giữa hai lần bắt đầu vòng lặp liên tiếp thay vì
+đo thời gian xử lý. Thời gian xử lý vẫn được giữ lại nhưng báo cáo riêng dưới tên độ
+trễ --- nó trả lời câu hỏi khác: máy có kịp xử lý không. Sau khi sửa, đặt 10 thì đo
+được 9{,}6.
 
-\subsection{Một lỗi đo tốc độ}
+\subsection{Luồng Thông minh}
+\label{sub:thamso-tm}
 
-Khi kiểm thử phần tham số này, đặt nhịp 10 khung hình mỗi giây nhưng màn hình vẫn báo
-26. Nguyên nhân nằm ở cách đo: đoạn mã cũ tính tốc độ bằng nghịch đảo \emph{thời gian
-xử lý một khung hình}, tức là đo năng lực tối đa của máy chứ không phải nhịp chạy
-thật, vì phần thời gian vòng lặp chủ động nghỉ không được tính vào.
+Luồng Thông minh không phải luồng Tiêu chuẩn cộng thêm một ô nhập. Nó \emph{thay} phần
+chọn lớp đối tượng bằng một câu mô tả, và \emph{khoá} ba tham số ở trên.
 
-Chừng nào nhịp mục tiêu còn là một hằng số chôn trong mã thì sai lệch này không ai
-thấy. Nhưng khi người dùng tự đặt nhịp, con số hiển thị mâu thuẫn trực tiếp với con số
-họ vừa nhập.
+\textbf{Câu mô tả là tham số bắt buộc duy nhất được thêm vào.} Người dùng gõ cả câu
+tiếng Việt --- \emph{``đếm người mặc áo đỏ đi vào''} --- và giao diện không cho sang
+bước sau nếu ô này rỗng. Danh sách lớp mặc định về \code{person} vì LA-3B được hỏi trên
+một khung cắt đã có sẵn đối tượng bên trong; hỏi ``có ba lô không'' trên khung cắt của
+một chiếc ô tô là câu hỏi vô nghĩa.
 
-Cách sửa là đo khoảng cách giữa hai lần bắt đầu vòng lặp liên tiếp thay vì đo thời
-gian xử lý. Thời gian xử lý vẫn được giữ lại nhưng báo cáo riêng dưới tên độ trễ ---
-nó trả lời câu hỏi khác: máy có kịp xử lý không. Sau khi sửa, đặt 10 thì đo được 9{,}6.
 
-\section{Ghi hình phân đoạn và xem lại}
+Hai tham số dùng chung không đổi ý nghĩa: \textbf{tốc độ xử lý} và \textbf{ngưỡng tin
+cậy} vẫn áp cho khâu YOLO, vì YOLO vẫn là bước tìm đối tượng. \textbf{Lịch chạy} cũng
+giữ nguyên ở luồng này, vì chi phí LA-3B chỉ phát sinh trong giờ
+bật.
+
+
+
+\section{Ghi hình, xem lại và tìm kiếm}
 \label{sec:ghihinh}
+
+\subsection{Ghi hình phân đoạn và tua video}
 
 Video ghi thành nhiều tệp ngắn, mặc định mỗi tệp 60 giây, đặt trong thư mục theo
 camera và theo ngày. Chia nhỏ có ba cái lợi: xoá dữ liệu quá hạn chỉ là xoá tệp,
@@ -580,12 +605,12 @@ Nhịp ghi giảm xuống 10 khung hình mỗi giây và chiều rộng tối đ
 Ghi nguyên nhịp và nguyên độ phân giải sẽ ngốn ổ đĩa rất nhanh mà không giúp gì
 cho việc xem lại.
 
-Về bộ mã hoá, \code{avc1} (H.264) phát được trực tiếp trong thẻ \code{<video>},
-nhưng bản OpenCV cài qua \code{pip} không phải lúc nào cũng kèm bộ mã hoá này do
-vướng bản quyền. Chương trình thử \code{avc1} trước, không được thì lùi về
-\code{mp4v} và ghi một dòng cảnh báo vào nhật ký.
-
-\subsection{Hỗ trợ tua video}
+Về bộ mã hoá: trình duyệt chỉ phát trực tiếp được MP4 mã hoá H.264, nhưng bản OpenCV
+cài qua \code{pip} không phải lúc nào cũng kèm bộ mã hoá này do vướng bản quyền, và
+\code{VideoWriter} khi đó \emph{lặng lẽ} lùi về \code{mp4v} --- tệp sinh ra vẫn hợp lệ
+nhưng không mở được trong thẻ \code{<video>}. Chương trình vì vậy thử \code{avc1}
+trước, không được thì lùi về \code{mp4v} và ghi một dòng cảnh báo vào nhật ký để người
+vận hành biết cần chuyển mã bằng \code{ffmpeg}.
 
 Muốn thanh tua của trình duyệt hoạt động, máy chủ phải hiểu tiêu đề HTTP
 \code{Range} và trả về mã 206 kèm đúng đoạn byte được yêu cầu. Thiếu phần này,
@@ -607,10 +632,10 @@ return StreamingResponse(
 Bấm vào một sự kiện trong danh sách sẽ gọi \code{GET /api/playback/at}, trả về
 đoạn video chứa mốc thời gian đó cùng số giây cần tua bên trong đoạn.
 
-\section{Tìm kiếm bằng câu tiếng Việt}
+\subsection{Tìm kiếm bằng câu tiếng Việt}
 \label{sec:timkiem}
 
-Người vận hành cần tra cứu kiểu \emph{"người đi vào hôm qua buổi sáng"} mà không
+Người vận hành cần tra cứu kiểu \emph{``người đi vào hôm qua buổi sáng''} mà không
 phải điền vào bốn ô lọc riêng biệt.
 
 Hệ thống phân tích câu bằng luật thay vì gọi mô hình ngôn ngữ. Phạm vi truy vấn ở
@@ -635,71 +660,8 @@ thống đã hiểu câu hỏi ra sao và sửa lại nếu sai.
 
 Cụm chỉ thời gian nhận được nhiều dạng: hôm nay, hôm qua, tuần này, tuần trước,
 \emph{N} ngày trước, các buổi trong ngày, và khoảng giờ tường minh kiểu
-\emph{"từ 8h đến 11h"}.
-
-\section{Giao diện người dùng}
-\label{sec:giaodien}
-
-Giao diện chia thành ba trang tương ứng ba nhóm công việc.
-
-\textbf{Giám sát} hiển thị lưới camera với ba mức 1$\times$1, 2$\times$2 và
-3$\times$3, chiếm toàn bộ chiều ngang màn hình. Việc khai báo camera mới cũng đặt
-ngay tại trang này thay vì tách ra một trang quản trị riêng, vì đây là thao tác
-người vận hành làm thường xuyên nhất.
-
-Cảnh báo không hiển thị thành một thanh cố định. Bản đầu tiên làm như vậy, nhưng
-danh sách gộp cảnh báo của mọi camera trôi quá nhanh --- ở cảnh đông, mỗi phút vài
-chục sự kiện --- và nhìn vào không biết sự kiện thuộc camera nào. Cách làm hiện tại:
-bấm vào một camera đang chạy pipeline thì mở màn hình chi tiết kèm bảng cảnh báo của
-đúng camera đó. Mỗi cảnh báo đi cùng ảnh chụp tại thời điểm xảy ra và hai nút xác
-nhận xử lý, đóng sự kiện.
-
-Vùng bấm để mở là toàn bộ khung hình chứ không phải một nút nhỏ ở góc. Bản trước
-đặt nút phóng to ở góc trên và chỉ hiện khi rê chuột vào, người dùng thử không tìm
-ra. Màn hình chi tiết có thêm chế độ toàn màn hình: hệ thống vừa gọi Fullscreen API
-của trình duyệt, vừa tự phủ kín cửa sổ bằng CSS. Cần cả hai vì Fullscreen API chỉ
-chạy khi có thao tác thật của người dùng và bị chặn trong một số môi trường nhúng ---
-lớp CSS đảm bảo nút luôn có tác dụng, lớp API chỉ là phần thêm để ẩn nốt thanh địa
-chỉ.
-
-Lưới cũng tự co số cột theo số camera đang hiển thị. Hai camera trong lưới
-2$\times$2 sẽ xếp thành hai cột chứ không để hai ô rỗng, và các hàng chia đều chiều
-cao còn lại nên khung hình giãn ra lấp hết chỗ trống thay vì co về tỉ lệ 16:9.
-
-\textbf{Cấu hình} liệt kê các pipeline đã tạo dưới dạng bảng, và chứa trình hướng
-dẫn bốn bước: chọn camera, chọn bài toán, chọn luồng xử lý cùng đối tượng và vẽ
-hình, cuối cùng là kiểm tra rồi kích hoạt. Trong lúc đang tạo, bảng pipeline được
-ẩn đi để người dùng tập trung vào từng bước.
-
-Bước thứ ba đặt khung vẽ bên trái và các lựa chọn bên phải trên cùng một màn hình.
-Ban đầu hai phần này tách thành hai bước riêng, nhưng khi dùng thử thì thấy người
-ta hay nhìn khung hình rồi mới quyết định nên đếm theo vạch hay theo vùng --- tách
-ra buộc phải đi tới đi lui giữa hai bước. Ngay trên khung vẽ có công tắc chuyển
-giữa \emph{vẽ vạch} và \emph{vẽ vùng}; đổi công tắc cũng là đổi luôn bài toán, vì
-hai thứ này gắn liền với nhau.
-
-Một quyết định về ngôn ngữ hiển thị: giao diện \emph{không} nhắc tên mô hình. Người
-vận hành chỉ thấy hai lựa chọn "Tiêu chuẩn" và "Thông minh" cùng mô tả việc mỗi chế
-độ làm được gì. Tên mô hình chỉ xuất hiện trong nhật ký hệ thống và tài liệu kỹ
-thuật. Lý do là người dùng cuối không có cơ sở để chọn giữa hai cái tên mô hình,
-nhưng chọn được giữa "đếm tất cả mọi người" và "chỉ đếm người mặc áo đỏ".
-
-Toạ độ vạch lưu ở dạng chuẩn hoá trong đoạn $[0,1]$ chứ không phải điểm ảnh. Cùng
-một cấu hình vì thế dùng được cho cả ảnh hiển thị đã thu nhỏ lẫn khung hình gốc
-mà bộ đếm làm việc, và vẫn đúng khi camera đổi độ phân giải.
-
-\textbf{Xem lại và Tìm kiếm} gồm trình phát video, thanh thời gian 24 giờ đánh
-dấu các vùng đã ghi hình cùng vị trí sự kiện, và ô tìm kiếm tiếng Việt. Kết quả tìm
-kiếm trả về dưới dạng lưới ảnh chứ không phải danh sách chữ: mỗi ô là ảnh chụp tại
-đúng thời điểm sự kiện, nhìn là biết ngay có đúng thứ mình tìm hay không.
-
-Ảnh trong lưới dùng bản thu nhỏ sinh phía máy chủ. Ảnh gốc từ camera 4K nặng khoảng
-520~KB, một lưới sáu mươi kết quả sẽ phải tải hơn ba mươi megabyte; bản thu nhỏ chỉ
-khoảng 10~KB, giảm gần năm mươi lần.
-
-Các chức năng quản trị (thời hạn lưu trữ, dung lượng đĩa, nhật ký hoạt động) vẫn có
-đầy đủ ở tầng API và dùng được qua tài liệu OpenAPI, nhưng không có trang giao diện
-riêng. Việc dọn dữ liệu quá hạn chạy tự động theo lịch, không cần thao tác thủ công.
+\emph{``từ 8h đến 11h''}. Việc so khớp phải dựa trên ranh giới từ để tránh nhầm các
+từ khác nhau sau khi bỏ dấu.
 
 \section{Cơ sở dữ liệu và chính sách lưu trữ}
 \label{sec:csdl}
@@ -710,32 +672,51 @@ xem Phụ lục~\ref{app:schema}.
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[node distance=9mm]
+\begin{adjustbox}{max width=\textwidth}
+\begin{tikzpicture}[
+  node distance=15mm and 18mm,
+  db/.style={draw=sdVien, fill=white, rounded corners=2pt,
+             line width=0.5pt, inner sep=4pt, align=left,
+             font=\scriptsize, text width=3.25cm,
+             rectangle split, rectangle split parts=2,
+             rectangle split part fill={sdVien!15, white},
+             rectangle split part align={center,left}}
+]
 
-\node[bang] (cameras) {\textbf{cameras}
-  \nodepart{two}\ \code{id} PK\\\ name, location\\\ source, kind\\\ enabled\ };
+% Hàng trên: bảng gốc và cấu hình hệ thống
+\node[db] (cameras) {\textbf{cameras}
+  \nodepart{two}\ttfamily
+  id PK\\ name, location\\ source, kind\\ enabled};
 
-\node[bang, right=22mm of cameras] (pipelines) {\textbf{pipelines}
-  \nodepart{two}\ \code{id} PK\\\ \code{camera\_id} FK\\\ task, mode, classes\\\ line, zone, conf\\\ schedule\ };
+\node[db, right=of cameras] (pipelines) {\textbf{pipelines}
+  \nodepart{two}\ttfamily
+  id PK\\ camera\_id FK\\ task, mode, classes\\ line, zone, conf\\ schedule};
 
-\node[bang, below left=12mm and -6mm of pipelines] (events) {\textbf{events}
-  \nodepart{two}\ \code{id} PK\\\ \code{camera\_id} FK\\\ \code{pipeline\_id} FK\\\ ts, kind, label\\\ snapshot\ };
+\node[db, right=of pipelines] (settings) {\textbf{settings}
+  \nodepart{two}\ttfamily
+  key PK\\ value};
 
-\node[bang, below right=12mm and -6mm of pipelines] (counts) {\textbf{counts}
-  \nodepart{two}\ \code{id} PK\\\ \code{pipeline\_id} FK\\\ ts, in, out\\\ occupancy\ };
+% Hàng dưới: dữ liệu phát sinh trong quá trình chạy
+\node[db, below=of cameras] (segments) {\textbf{segments}
+  \nodepart{two}\ttfamily
+  id PK\\ camera\_id FK\\ start\_ts, end\_ts\\ path, duration};
 
-\node[bang, below=26mm of cameras] (segments) {\textbf{segments}
-  \nodepart{two}\ \code{id} PK\\\ \code{camera\_id} FK\\\ start\_ts, end\_ts\\\ path, duration\ };
+\node[db, below=of pipelines] (events) {\textbf{events}
+  \nodepart{two}\ttfamily
+  id PK\\ camera\_id FK\\ pipeline\_id FK\\ ts, kind, label\\ snapshot};
 
-\node[bang, right=16mm of counts] (settings) {\textbf{settings}
-  \nodepart{two}\ \code{key} PK\\\ value\ };
+\node[db, below=of settings] (counts) {\textbf{counts}
+  \nodepart{two}\ttfamily
+  id PK\\ pipeline\_id FK\\ ts, in, out\\ occupancy};
 
-\draw[mui] (cameras.east)  -- node[nhanmui, above] {1..n} (pipelines.west);
-\draw[mui] (cameras.south) -- node[nhanmui, left]  {1..n} (segments.north);
-\draw[mui] (pipelines.south) -- (events.north);
-\draw[mui] (pipelines.south) -- (counts.north);
-\draw[mui] (cameras.south east) -- (events.north west);
+% Các quan hệ khoá ngoại
+\draw[mui] (cameras.east) -- node[nhanmui, above] {1:N} (pipelines.west);
+\draw[mui] (cameras.south) -- node[nhanmui, left] {1:N} (segments.north);
+\draw[mui] (pipelines.south) -- node[nhanmui, right] {1:N} (events.north);
+\draw[mui] (pipelines.south east) -- node[nhanmui, above, sloped] {1:N} (counts.north west);
+\draw[mui] (cameras.south east) -- node[nhanmui, above, sloped] {1:N} (events.north west);
 \end{tikzpicture}
+\end{adjustbox}
 \caption{Lược đồ cơ sở dữ liệu. Xoá một camera sẽ kéo theo các pipeline gắn với
 nó nhờ ràng buộc khoá ngoại.}
 \label{fig:csdl}

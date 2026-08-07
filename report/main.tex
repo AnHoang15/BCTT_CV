@@ -1,14 +1,15 @@
+% !TeX program = xelatex
 % =============================================================================
 %  BÁO CÁO KẾT THÚC THỰC TẬP
 %  Hệ thống giám sát camera bằng thị giác máy tính (VisionOS)
 %
-%  Biên dịch:  xelatex main.tex  →  biber main  →  xelatex main.tex ×2
+%  Biên dịch:  xelatex main.tex  →  bibtex main  →  xelatex main.tex ×2
 %  hoặc gọn hơn:  latexmk -xelatex main.tex
 %
 %  BẮT BUỘC dùng XeLaTeX hoặc LuaLaTeX (không dùng pdfLaTeX) vì tài liệu nạp
 %  phông chữ hệ thống qua fontspec để hiển thị tiếng Việt có dấu.
 % =============================================================================
-\documentclass[a4paper,13pt]{extreport}
+\documentclass[a4paper,12pt]{extreport}
 % Nếu máy chưa có gói extsizes, đổi dòng trên thành:
 %   \documentclass[a4paper,12pt]{report}
 
@@ -18,12 +19,13 @@
 \setdefaultlanguage{vietnamese}
 \setotherlanguage{english}
 
-% Times New Roman có sẵn trên macOS và Windows. Trên Linux, cài ttf-mscorefonts
-% hoặc đổi sang phông thay thế đã chú thích bên dưới.
+% Các phông dưới đây có sẵn trong môi trường biên dịch của dự án.
 \setmainfont{Times New Roman}
-% \setmainfont{Liberation Serif}      % thay thế trên Linux
-\setmonofont{Menlo}[Scale=0.85]
-% \setmonofont{DejaVu Sans Mono}[Scale=0.85]   % thay thế trên Linux
+% JetBrains Mono không có sẵn trên mọi máy. Không có phông dự phòng thì fontspec
+% dừng hẳn bản dựng chứ không cảnh báo suông, nên phải tự lùi về Menlo (macOS).
+\IfFontExistsTF{JetBrains Mono}
+  {\setmonofont{JetBrains Mono}[Scale=0.85]}
+  {\setmonofont{Menlo}[Scale=0.85]}
 
 % ── Bố cục trang ─────────────────────────────────────────────────────────────
 \usepackage[
@@ -35,17 +37,20 @@
 \onehalfspacing
 \setlength{\parindent}{1cm}
 \setlength{\parskip}{0.3em}
+\setlength{\emergencystretch}{3em}
 
 % ── Gói hỗ trợ ───────────────────────────────────────────────────────────────
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{graphicx}
+\usepackage{adjustbox}
 \usepackage{float}
 \usepackage{booktabs}
 \usepackage{longtable}
 \usepackage{array}
 \usepackage{multirow}
 \usepackage{tabularx}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
 \usepackage{enumitem}
 \usepackage{xcolor}
 \usepackage{fancyhdr}
@@ -59,7 +64,13 @@
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta, positioning, fit, backgrounds, calc, shapes.multipart}
 
-\usepackage[hidelinks]{hyperref}
+% ── Trích dẫn ────────────────────────────────────────────────────────────────
+% backend=bibtex chứ không phải biber: biber là chương trình riêng phải cài thêm,
+% còn bibtex đi kèm sẵn mọi bản TeX. Đổi sang biber được nếu máy có.
+\usepackage[backend=bibtex, style=numeric, sorting=none]{biblatex}
+\addbibresource{refs.bib}
+
+\usepackage[hidelinks,hypertexnames=false]{hyperref}
 
 % ── Kiểu dùng chung cho các sơ đồ ────────────────────────────────────────────
 \definecolor{sdNen}{HTML}{EEF3F9}
@@ -79,12 +90,6 @@
   khoi/.style     = {draw=sdVien!40, dashed, rounded corners=3pt, inner sep=8pt},
 }
 
-% ── Trích dẫn ────────────────────────────────────────────────────────────────
-% Dùng biblatex + biber. Nếu muốn dùng BibTeX truyền thống, thay bằng
-% \usepackage[numbers]{natbib} và \bibliographystyle{unsrt}.
-\usepackage[backend=biber, style=numeric, sorting=none]{biblatex}
-\addbibresource{refs.bib}
-
 % ── Định dạng tiêu đề chương/mục ─────────────────────────────────────────────
 \titleformat{\chapter}[block]
   {\normalfont\Large\bfseries}{Chương \thechapter.}{0.6em}{\Large}
@@ -96,6 +101,7 @@
 
 % ── Đầu trang, chân trang ────────────────────────────────────────────────────
 \pagestyle{fancy}
+\setlength{\headheight}{15pt}
 \fancyhf{}
 \fancyhead[L]{\small\itshape Báo cáo kết thúc thực tập}
 \fancyhead[R]{\small\thepage}
@@ -134,6 +140,12 @@
 \newcommand{\en}[1]{\textit{#1}}                 % thuật ngữ tiếng Anh
 \newcommand{\todo}[1]{\textcolor{red}{[\textbf{CẦN ĐIỀN:} #1]}}
 \newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\answerline}{\noindent\rule{\linewidth}{0.4pt}\par\vspace{0.35cm}}
+\newcommand{\safeincludegraphics}[2][]{%
+  \IfFileExists{#2}{\includegraphics[#1]{#2}}{%
+    \fbox{\parbox[c][4cm][c]{0.9\linewidth}{\centering
+      Hình minh họa chưa được cung cấp\\[0.2cm]\texttt{\detokenize{#2}}}}}%
+}
 
 % =============================================================================
 \begin{document}
@@ -163,6 +175,7 @@
 \input{chapters/03_ket_qua}
 
 % ── Tài liệu tham khảo ───────────────────────────────────────────────────────
+% Đặt TRƯỚC \appendix, nếu không danh mục sẽ bị đánh số như một phụ lục.
 \clearpage
 \phantomsection
 \addcontentsline{toc}{chapter}{Tài liệu tham khảo}

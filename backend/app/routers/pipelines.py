@@ -132,31 +132,15 @@ def list_tasks():
             {"id": "hourly", "name": "Mỗi đầu giờ"},
             {"id": "daily", "name": "Mỗi đầu ngày"},
         ],
-        # Ba mức đánh đổi giữa tài nguyên máy và độ nhạy. Số liệu là nhịp xử lý thật
-        # mà vòng lặp camera sẽ giữ, không phải nhãn trang trí.
-        "speed_presets": [
-            {
-                "id": "eco", "name": "Tiết kiệm tài nguyên",
-                "description": "Phù hợp server yếu hoặc chạy nhiều camera cùng lúc",
-                "target_fps": 5, "conf": 0.35, "recommended": False,
-                "bullets": ["Kiểm tra mỗi ~0,2 giây", "Ít tốn CPU và RAM",
-                            "Có thể bỏ sót người đi nhanh"],
-            },
-            {
-                "id": "balanced", "name": "Cân bằng",
-                "description": "Đề xuất cho hầu hết trường hợp",
-                "target_fps": 15, "conf": 0.25, "recommended": True,
-                "bullets": ["Phát hiện trong khoảng 0,07 giây", "CPU vừa phải",
-                            "Độ chính xác tốt"],
-            },
-            {
-                "id": "accurate", "name": "Chính xác tối đa",
-                "description": "Cần máy khoẻ, ít camera",
-                "target_fps": 30, "conf": 0.20, "recommended": False,
-                "bullets": ["Phát hiện gần như tức thì", "Bám đối tượng mượt hơn",
-                            "Tốn CPU hoặc GPU đáng kể"],
-            },
-        ],
+        # Nhịp xử lý và ngưỡng tin cậy đặt trực tiếp bằng hai thanh trượt trong giao diện,
+        # không còn ba preset đóng gói sẵn — preset chỉ đặt đúng hai tham số này nên trùng
+        # hoàn toàn với phần chỉnh tay. Mặc định 15 fps / conf 0,25.
+        #
+        # Nhịp khung hình ảnh hưởng rất mạnh tới độ chính xác đếm, mạnh hơn mọi tham số
+        # khác. Đo trên nhãn chuẩn (`scripts/quet_nhip_khung.py`, MOT17-09):
+        #   30 fps → F1 0,90    10 fps → F1 0,66     5 fps → F1 0,29
+        #   15 fps → F1 0,83     7,5 fps → F1 0,59
+        # Không có ngưỡng fps tối thiểu chung: xem Mục 3.3.5 của báo cáo.
         "trackers": [
             {"id": "bytetrack", "name": "ByteTrack — chính xác, nhanh", "available": True},
         ],

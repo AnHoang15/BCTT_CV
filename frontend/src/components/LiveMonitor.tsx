@@ -12,7 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  BellOff, Check, Grid2x2, Grid3x3, LogIn, LogOut, Maximize, Maximize2, Plus, Power,
+  BellOff, Check, Grid2x2, Grid3x3, LayoutGrid, LogIn, LogOut, Maximize, Maximize2, Plus, Power,
   RefreshCw, Sparkles, Square, Trash2, X,
 } from 'lucide-react';
 import * as api from '../api';
@@ -23,7 +23,9 @@ import {
   ConfirmDialog, useToast,
 } from './common';
 
-type GridSize = 1 | 4 | 9;
+/* Số ô trên MỘT MÀN HÌNH, không phải số camera được hiển thị. Nhiều camera hơn thì
+   cuộn xuống xem tiếp, chứ không bị cắt như bản trước. */
+type GridSize = 1 | 4 | 9 | 16;
 
 interface Props {
   cameras: Camera[];
@@ -108,14 +110,23 @@ export default function LiveMonitor({ cameras, onChanged }: Props) {
     return () => window.clearInterval(timer);
   }, [loadEvents, expanded]);
 
+  // Hiển thị TẤT CẢ camera. Bản trước cắt bằng `slice(0, grid)` nên camera thứ 10 trở
+  // đi biến mất hẳn khỏi giao diện mà không có dấu hiệu gì.
   const visible = useMemo(
-    () => (expanded ? cameras.filter((c) => c.id === expanded) : cameras.slice(0, grid)),
-    [cameras, grid, expanded],
+    () => (expanded ? cameras.filter((c) => c.id === expanded) : cameras),
+    [cameras, expanded],
   );
+  // Cạnh của lưới: 1×1, 2×2, 3×3 hay 4×4.
+  const canh = expanded ? 1 : Math.round(Math.sqrt(grid));
   // Không để lại ô trống: hai camera trong lưới 2×2 thì xếp 2 cột cho khung hình to
   // hơn, thay vì bốn ô mà hai ô rỗng.
-  const requested = expanded || grid === 1 ? 1 : grid === 4 ? 2 : 3;
-  const columns = Math.max(1, Math.min(requested, visible.length));
+  const columns = Math.max(1, Math.min(canh, visible.length));
+  // Số hàng LẤP ĐẦY màn hình. Ít camera thì hàng giãn ra cho kín chiều cao; nhiều hơn
+  // sức chứa thì giữ đúng `canh` hàng và phần dư cuộn xuống.
+  const hangCanThiet = Math.ceil(visible.length / columns);
+  const hangHienThi = Math.max(1, Math.min(hangCanThiet, canh));
+  const KHE = 12;   // gap-3 = 0.75rem
+  const chieuCaoHang = `calc((100% - ${(hangHienThi - 1) * KHE}px) / ${hangHienThi})`;
 
   const handleAck = async (event: AppEvent, status: 'processing' | 'closed') => {
     try {
@@ -186,11 +197,11 @@ export default function LiveMonitor({ cameras, onChanged }: Props) {
               </button>
               <div className="flex items-center gap-0.5 rounded-lg border border-slate-200
                               bg-white p-1">
-                {([1, 4, 9] as GridSize[]).map((size) => (
+                {([1, 4, 9, 16] as GridSize[]).map((size) => (
                   <button
                     key={size}
                     onClick={() => setGrid(size)}
-                    title={`Lưới ${size === 1 ? '1×1' : size === 4 ? '2×2' : '3×3'}`}
+                    title={`Lưới ${Math.round(Math.sqrt(size))}×${Math.round(Math.sqrt(size))}`}
                     className={`cursor-pointer rounded p-1.5 transition-colors ${
                       grid === size
                         ? 'bg-emerald-600 text-white'
@@ -199,7 +210,8 @@ export default function LiveMonitor({ cameras, onChanged }: Props) {
                   >
                     {size === 1 ? <Square size={15} />
                       : size === 4 ? <Grid2x2 size={15} />
-                      : <Grid3x3 size={15} />}
+                      : size === 9 ? <Grid3x3 size={15} />
+                      : <LayoutGrid size={15} />}
                   </button>
                 ))}
               </div>
@@ -304,8 +316,11 @@ export default function LiveMonitor({ cameras, onChanged }: Props) {
             </div>
           ) : (
             <div
-              className="grid h-full auto-rows-fr gap-3"
-              style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+              className="scroll-thin grid h-full gap-3 overflow-y-auto"
+              style={{
+                gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+                gridAutoRows: chieuCaoHang,
+              }}
             >
               {visible.map((camera) => (
                 <CameraTile
@@ -313,6 +328,7 @@ export default function LiveMonitor({ cameras, onChanged }: Props) {
                   camera={camera}
                   nonce={streamNonce}
                   expanded={expanded === camera.id}
+                  day={canh >= 3}
                   onExpand={() => setExpanded(expanded === camera.id ? null : camera.id)}
                   onToggle={() => handleToggle(camera)}
                   onDelete={() => setDeleting(camera)}
@@ -384,9 +400,11 @@ export default function LiveMonitor({ cameras, onChanged }: Props) {
 
 /* ── Ô camera ─────────────────────────────────────────────────────────── */
 function CameraTile({
-  camera, nonce, expanded, onExpand, onToggle, onDelete,
+  camera, nonce, expanded, day = false, onExpand, onToggle, onDelete,
 }: {
   camera: Camera; nonce: number; expanded: boolean;
+  /** Lưới dày (3×3 trở lên): hạ sàn chiều cao để đúng số hàng lọt màn hình. */
+  day?: boolean;
   onExpand: () => void; onToggle: () => void; onDelete: () => void;
 }) {
   const isLive = camera.enabled && camera.status === 'online';
@@ -414,7 +432,7 @@ function CameraTile({
           }
         }}
         title={expanded ? undefined : 'Bấm để xem camera này'}
-        className={`relative min-h-[14rem] flex-1 bg-slate-950 outline-none ${
+        className={`relative ${day ? 'min-h-[7rem]' : 'min-h-[14rem]'} flex-1 bg-slate-950 outline-none ${
           expanded ? '' : 'cursor-pointer focus-visible:ring-2 focus-visible:ring-emerald-500'
         }`}
       >

@@ -2,6 +2,11 @@
 %  Chương 1 — Giới thiệu
 %  Hướng dẫn của Khoa: 1--2 trang. Nêu công việc được giao, phát biểu bài toán,
 %  khảo sát công nghệ kèm ưu nhược điểm, và lý do chọn công nghệ đã dùng.
+%
+%  CẤU TRÚC: mỗi khối kiến thức được trình bày MỘT lần, gồm cả phần lý thuyết
+%  lẫn phần so sánh lựa chọn. Trước đây hai phần này nằm ở hai mục riêng
+%  ("Cơ sở lý thuyết" và "Khảo sát công nghệ") nên ByteTrack, YOLO và bài toán
+%  phát hiện đều được nói hai lần.
 % ─────────────────────────────────────────────────────────────────────────────
 \chapter{Giới thiệu}
 \label{ch:gioithieu}
@@ -42,37 +47,27 @@ chủ GPU chuyên dụng; xử lý phải theo kịp luồng video thời gian t
 dùng cuối là nhân viên vận hành, không phải kỹ sư, nên mọi cấu hình phải làm được
 qua giao diện đồ họa.
 
-\section{Cơ sở lý thuyết}
+\section{Cơ sở lý thuyết và lựa chọn công nghệ}
 \label{sec:lythuyet}
 
-Mục này trình bày nền tảng của bốn khối kiến thức mà hệ thống dựa vào: phát hiện đối
-tượng, bám vết đa đối tượng, hình học của phép đếm qua vạch, và các chỉ số dùng để
-đánh giá. Mục~\ref{sec:khaosat} tiếp sau sẽ so sánh các lựa chọn cụ thể trong từng
-khối.
+Hệ thống dựa trên bốn khối kiến thức: phát hiện đối tượng, bám vết đa đối tượng,
+hình học của phép đếm, và mô hình thị giác--ngôn ngữ. Mỗi mục dưới đây trình bày
+nền tảng của một khối rồi so sánh ngay các lựa chọn cụ thể trong khối đó, thay vì
+tách lý thuyết và khảo sát thành hai phần rời nhau. Hai mục cuối dành cho tầng
+truyền hình--lưu trữ và cho các chỉ số dùng ở Chương~\ref{ch:ketqua}.
 
-\subsection{Bài toán phát hiện đối tượng}
+\subsection{Phát hiện đối tượng}
+\label{sub:phathien-lythuyet}
 
 Cho một ảnh $I$, phát hiện đối tượng là tìm tập hợp
 $\mathcal{D} = \{(b_i, c_i, s_i)\}$, trong đó $b_i = (x_1, y_1, x_2, y_2)$ là hộp giới
 hạn, $c_i$ là lớp đối tượng, và $s_i \in [0,1]$ là điểm tin cậy. Khác với phân loại
 ảnh --- chỉ trả về một nhãn cho cả ảnh --- ở đây số lượng đối tượng không biết trước.
 
-\subsubsection*{Một giai đoạn và hai giai đoạn}
 
-Họ \emph{hai giai đoạn} như Faster R-CNN chia bài toán làm hai bước: một mạng con đề
-xuất các vùng khả nghi, mạng thứ hai phân loại và tinh chỉnh từng vùng. Cách này cho
-độ chính xác cao nhưng chi phí tỉ lệ với số vùng đề xuất.
-
-Họ \emph{một giai đoạn} như YOLO bỏ bước đề xuất. Ảnh được chia thành lưới ô, và mạng
-dự đoán trực tiếp hộp cùng lớp cho từng ô trong một lần lan truyền xuôi duy nhất. Đây
-là lý do YOLO nhanh hơn nhiều lần, và cũng là lý do một chi tiết quan trọng ở
-Mục~\ref{sec:chungphathien}: \textbf{toàn bộ 80 lớp COCO được tính trong cùng một lần
-chạy}, nên lọc bớt lớp ở đầu ra không làm mạng nhẹ đi.
-
-\subsubsection*{Độ chồng lấn và khử hộp trùng}
-
-Một đối tượng thường sinh ra nhiều hộp dự đoán chồng lên nhau. Đại lượng đo mức chồng
-lấn giữa hai hộp $A$ và $B$ là tỉ số giao trên hợp:
+\textbf{Độ chồng lấn và khử hộp trùng.} Một đối tượng thường sinh ra nhiều hộp dự đoán
+chồng lên nhau. Đại lượng đo mức chồng lấn giữa hai hộp $A$ và $B$ là tỉ số giao trên
+hợp:
 
 \begin{equation}
   \mathrm{IoU}(A, B) = \frac{|A \cap B|}{|A \cup B|} \in [0, 1]
@@ -86,24 +81,32 @@ $\tau_{\text{NMS}}$, và lặp lại với các hộp còn lại.
 Chọn $\tau_{\text{NMS}}$ là một đánh đổi trực tiếp. Ngưỡng thấp loại mạnh tay, dễ gộp
 hai người đứng sát nhau thành một. Ngưỡng cao giữ lại nhiều hộp, dễ đếm một người thành
 hai. Hệ thống đặt $\tau_{\text{NMS}} = 0{,}5$ vì cảnh mục tiêu là nơi đông người, ở đó
-hai hộp chồng lấn đáng kể vẫn thường là hai người thật.
+hai hộp chồng lấn đáng kể vẫn thường là hai người thật. Ngưỡng tin cậy
+$\tau_{\text{conf}}$ là tham số thứ hai: hộp có $s_i < \tau_{\text{conf}}$ bị loại
+trước khi vào NMS.
 
-Ngưỡng tin cậy $\tau_{\text{conf}}$ là tham số thứ hai: hộp có $s_i < \tau_{\text{conf}}$
-bị loại trước khi vào NMS. Ảnh hưởng của tham số này lên kết quả đếm được đo ở
-Mục~\ref{sec:mot17}, và kết quả không như trực giác thông thường.
+\textbf{Lựa chọn mô hình.} Hệ thống dùng YOLOv8~\cite{jocher2023ultralytics}, một biến thể
+mới trong họ mô hình phát hiện một giai đoạn YOLO~\cite{redmon2016yolo}. Lý do quyết định là bộ trọng số huấn
+luyện sẵn trên COCO~\cite{lin2014coco} đã chứa lớp \code{person} cùng các lớp phương tiện, nên chạy được
+ngay mà không cần gán nhãn và huấn luyện lại. Thư viện Ultralytics cũng đóng gói sẵn cả phần suy luận lẫn phần xuất
+mô hình. Các họ mô hình khác - Faster R-CNN~\cite{ren2015faster} hai giai
+đoạn, hay DETR~\cite{carion2020detr} - không được đưa vào đo. Chúng bị loại từ đầu trên căn cứ lý
+thuyết ở trên (hai giai đoạn thì chi phí tỉ lệ với số vùng đề xuất, khó đạt thời gian
+thực trên máy không có GPU rời; còn DETR cần huấn luyện dài và hệ sinh thái triển khai
+mỏng hơn) chứ không phải trên số liệu tự đo. 
+
+
 
 \subsection{Bám vết đa đối tượng}
+\label{sub:bamvet-lythuyet}
 
-Phát hiện chỉ cho biết \emph{có gì trong khung hình này}. Muốn biết \emph{một người đã
-đi qua vạch hay chưa} thì phải nối các lần phát hiện ở những khung hình khác nhau lại
-thành \emph{vết} của cùng một đối tượng, và gán cho mỗi vết một mã định danh bền vững.
-
+Phát hiện chỉ cho biết có gì trong khung hình này. Muốn biết  người đã đi qua vạch hay chưa thì phải nối các lần phát hiện ở những khung hình khác nhau lại
+thành vết của cùng một đối tượng, và gán cho mỗi vết một mã định danh bền vững.
 Bài toán này gọi là bám vết đa đối tượng theo mô hình \en{tracking-by-detection}, gồm
 hai phần lặp lại ở mỗi khung hình.
 
-\subsubsection*{Dự đoán bằng bộ lọc Kalman}
-
-Mỗi vết mang một trạng thái mô tả vị trí và vận tốc, thường là
+\textbf{Dự đoán bằng bộ lọc Kalman.} Mỗi vết mang một trạng thái mô tả vị trí và vận
+tốc, thường là
 
 \begin{equation}
   \mathbf{x} = (u,\; v,\; a,\; h,\; \dot{u},\; \dot{v},\; \dot{a},\; \dot{h})^\top
@@ -111,46 +114,55 @@ Mỗi vết mang một trạng thái mô tả vị trí và vận tốc, thườ
 \end{equation}
 
 với $(u,v)$ là tâm hộp, $a$ tỉ lệ khung, $h$ chiều cao, và các đại lượng có dấu chấm là
-đạo hàm theo thời gian. Bộ lọc Kalman giả định chuyển động đều giữa hai khung hình, dự
+đạo hàm theo thời gian. Bộ lọc Kalman~\cite{kalman1960} giả định chuyển động đều giữa hai khung hình, dự
 đoán trạng thái kế tiếp $\hat{\mathbf{x}}_{t}$ từ $\mathbf{x}_{t-1}$, rồi hiệu chỉnh lại
-bằng phép đo thực tế khi có hộp phát hiện khớp với vết.
+bằng phép đo thực tế khi có hộp phát hiện khớp với vết. Vai trò của bộ lọc là \emph{lấp
+chỗ trống}: khi một người bị che khuất trong vài khung, vết vẫn tiếp tục được dự đoán và
+có cơ hội nối lại khi người đó hiện ra.
 
-Vai trò của bộ lọc là \emph{lấp chỗ trống}: khi một người bị che khuất trong vài khung,
-vết vẫn tiếp tục được dự đoán và có cơ hội nối lại khi người đó hiện ra.
-
-\subsubsection*{Ghép cặp bằng bài toán phân công}
-
-Ở mỗi khung hình, cần ghép $n$ vết đang có với $m$ hộp vừa phát hiện. Đây là bài toán
-phân công: xây ma trận chi phí $C \in \mathbb{R}^{n \times m}$ rồi tìm phép ghép làm
-tổng chi phí nhỏ nhất, giải bằng thuật toán Hungary.
-
-Chi phí thường lấy theo độ chồng lấn giữa hộp dự đoán và hộp phát hiện:
+\textbf{Ghép cặp bằng bài toán phân công.} Ở mỗi khung hình, cần ghép $n$ vết đang có
+với $m$ hộp vừa phát hiện. Đây là bài toán phân công: xây ma trận chi phí
+$C \in \mathbb{R}^{n \times m}$ rồi tìm phép ghép làm tổng chi phí nhỏ nhất, giải bằng
+thuật toán Hungary~\cite{kuhn1955hungarian}. Chi phí thường lấy theo độ chồng lấn giữa hộp dự đoán và hộp phát
+hiện:
 
 \begin{equation}
   C_{ij} = 1 - \mathrm{IoU}(\hat{b}_i, d_j)
   \label{eq:cost}
 \end{equation}
 
-Cặp có chi phí vượt ngưỡng $\tau_{\text{match}}$ bị từ chối ghép. \textbf{Đây là chỗ dễ
-hiểu nhầm nhất} và đã gây một lỗi thực tế trong dự án: ngưỡng áp lên \emph{chi phí}
-$1 - \mathrm{IoU}$ chứ không phải lên $\mathrm{IoU}$. Đặt $\tau_{\text{match}} = 0{,}3$
-nghĩa là đòi hỏi $\mathrm{IoU} \geq 0{,}7$ giữa hai khung liên tiếp --- một yêu cầu rất
-khắt khe mà ở cảnh đông người hầu như không cặp nào đạt được. Số liệu ở
-Bảng~\ref{tab:bytetrack} cho thấy hậu quả: hai người trong cảnh sinh ra 65 mã định danh
-với độ dài vết trung vị đúng hai khung hình.
+Cặp có chi phí vượt ngưỡng $\tau_{\text{match}}$ bị từ chối ghép. Đây là chỗ dễ
+hiểu nhầm nhất: ngưỡng áp lên \emph{chi phí} $1 - \mathrm{IoU}$ chứ không phải lên
+$\mathrm{IoU}$. Đặt $\tau_{\text{match}} = 0{,}3$ nghĩa là đòi hỏi
+$\mathrm{IoU} \geq 0{,}7$ giữa hai khung liên tiếp --- một yêu cầu rất khắt khe mà ở
+cảnh đông người hầu như không cặp nào đạt được. Hậu quả đo được nằm ở
+Bảng~\ref{tab:bytetrack}.
 
-\subsubsection*{Đóng góp của ByteTrack}
+\textbf{Đóng góp của ByteTrack và lý do chọn.} SORT~\cite{bewley2016sort} chạy rất nhanh nhưng loại bỏ mọi hộp
+có điểm tin cậy thấp trước khi ghép cặp, nên đổi mã định danh liên tục mỗi khi đối tượng
+bị che khuất. DeepSORT~\cite{wojke2017deepsort} khắc phục bằng cách so khớp thêm đặc trưng ngoại hình, đổi lại
+phải chạy thêm một mạng trích đặc trưng cho từng hộp.
 
-Các thuật toán trước ByteTrack loại bỏ mọi hộp có điểm tin cậy thấp trước khi ghép cặp,
-vì cho rằng chúng là nhiễu. ByteTrack nhận xét rằng phần lớn hộp điểm thấp không phải
-nhiễu mà là \emph{đối tượng thật đang bị che khuất một phần} --- đúng những lúc mà việc
-giữ vết là khó nhất và cần nhất.
+ByteTrack~\cite{zhang2022bytetrack} chọn hướng khác: nó nhận xét rằng phần lớn hộp điểm thấp không phải nhiễu mà
+là \emph{đối tượng thật đang bị che khuất một phần} --- đúng những lúc mà việc giữ vết
+là khó nhất và cần nhất. Thuật toán vì vậy ghép cặp hai lượt: lượt đầu dùng các hộp điểm
+cao, lượt sau đem những vết chưa ghép được đối chiếu với các hộp điểm thấp còn lại. Nhờ
+vậy vết đi qua được các đoạn che khuất ngắn mà không cần mạng phụ nào.
 
-Thuật toán vì vậy ghép cặp hai lượt: lượt đầu dùng các hộp điểm cao, lượt sau đem những
-vết chưa ghép được đối chiếu với các hộp điểm thấp còn lại. Nhờ vậy vết đi qua được các
-đoạn che khuất ngắn mà không cần thêm mạng trích đặc trưng ngoại hình như DeepSORT.
+Supervision - lớp keo giữa các thành phần. ByteTrack được dùng qua thư viện
+\en{Supervision}~\cite{supervision2024}, nhưng vai trò của thư viện này rộng hơn một bản cài đặt bám vết. Nó
+định nghĩa kiểu \code{Detections} --- một mảng hộp giới hạn kèm điểm tin cậy, mã lớp và
+mã vết --- và kiểu đó trở thành \emph{định dạng trung gian} nối YOLO với bám vết, với bộ
+đếm và với khâu vẽ chú thích. Đổi mô hình phát hiện chỉ là đổi hàm sinh ra
+\code{Detections}, phần còn lại của chuỗi không phải sửa gì.
 
-\subsection{Hình học của phép đếm qua vạch}
+Ngoài ra thư viện cung cấp sẵn ba thứ hệ thống dùng trực tiếp: hàm khử hộp trùng
+(Mục~\ref{sub:phathien-lythuyet}), bộ bám ByteTrack. Các tiện ích vẽ hộp và nhãn thì không
+dùng, vì hệ thống cần vẽ thêm vạch, mũi tên chiều và bảng số theo cách riêng.
+
+
+\subsection{Hình học của phép đếm}
+\label{sub:hinhhoc}
 
 Vạch đếm là đoạn thẳng nối hai điểm $P_1$ và $P_2$ do người dùng vẽ trên khung hình.
 Đặt $\mathbf{v} = P_2 - P_1$. Với một điểm $p$ bất kỳ, \emph{khoảng cách có dấu} tới
@@ -164,9 +176,8 @@ Vạch đếm là đoạn thẳng nối hai điểm $P_1$ và $P_2$ do người 
 Dấu của $d(p)$ cho biết điểm nằm ở phía nào của vạch; trị tuyệt đối cho biết cách vạch
 bao xa. Một lượt qua vạch tương ứng với việc $d$ đổi dấu.
 
-\subsubsection*{Ba vấn đề của cách làm ngây thơ}
-
-Xét dấu $d$ trực tiếp trên tâm hộp giới hạn hỏng trong ba tình huống:
+\textbf{Ba vấn đề.} Xét dấu $d$ trực tiếp trên tâm hộp giới hạn
+hỏng trong ba tình huống:
 
 \begin{enumerate}[leftmargin=*, itemsep=2pt]
   \item \textbf{Hộp phình theo nhịp bước.} Người đi về phía camera có hộp to dần, tâm
@@ -178,15 +189,10 @@ Xét dấu $d$ trực tiếp trên tâm hộp giới hạn hỏng trong ba tình
         không còn lịch sử để biết nó đang ở phía nào.
 \end{enumerate}
 
-\subsubsection*{Ba cơ chế khắc phục}
-
-Hệ thống giải quyết bằng ba cơ chế, trình bày chi tiết ở Mục~\ref{sec:dem}:
-
-\emph{Điểm neo bàn chân.} Thay tâm hộp bằng điểm giữa cạnh đáy, xấp xỉ vị trí bàn chân
-chạm đất. Điểm này di chuyển đơn điệu theo hướng đi và không dao động theo nhịp bước.
-
-\emph{Vùng đệm và độ trễ xác nhận.} Đối tượng chỉ được coi là đã sang phía mới khi
-$|d| > \varepsilon$ và giữ nguyên phía đó trong ít nhất $k$ khung hình liên tiếp:
+\textbf{Ba cơ chế khắc phục.} Hệ thống dùng điểm neo bàn chân thay cho tâm hộp,
+một vùng đệm kèm độ trễ xác nhận, và cơ chế nối lại vết theo không gian;
+phần cài đặt chi tiết ở Mục~\ref{sec:dem}. Cơ chế thứ hai định nghĩa phía của một điểm
+theo một ngưỡng $\varepsilon$ thay vì theo dấu trần trụi:
 
 \begin{equation}
   \text{phía}(p) =
@@ -198,53 +204,107 @@ $|d| > \varepsilon$ và giữ nguyên phía đó trong ít nhất $k$ khung hìn
   \label{eq:phia}
 \end{equation}
 
-Đơn vị của $\varepsilon$ là một quyết định thiết kế quan trọng và từng bị chọn sai
-trong dự án; phân tích ở Mục~\ref{sec:loi-vungdem}.
+và chỉ ghi nhận một lượt khi phía mới giữ nguyên trong ít nhất $k$ khung hình liên tiếp.
+Đơn vị của $\varepsilon$ phải tỉ lệ với chiều cao đối tượng để thích nghi với phối cảnh.
 
-\emph{Nối lại vết theo không gian.} Khi một mã định danh mới xuất hiện gần vị trí một
-mã vừa biến mất, toàn bộ lịch sử được chuyển sang mã mới.
+\textbf{Điều kiện để phép đếm hoạt động.} Từ công thức~\eqref{eq:phia} suy ra một điều
+kiện thường bị bỏ qua: đối tượng phải dịch chuyển theo phương vuông góc với
+vạch một quãng lớn hơn $2\varepsilon$ thì mới được đếm. Quãng đường \emph{song song}
+với vạch, dù dài bao nhiêu, cũng không đóng góp gì. Hệ quả thực tiễn là vạch phải cắt
+vuông góc với hướng di chuyển chính của đám đông; Bảng~\ref{tab:mot17-huong} đo được
+cái giá của việc đặt sai hướng.
 
-\subsubsection*{Điều kiện để phép đếm hoạt động}
-
-Từ công thức~\eqref{eq:phia} suy ra một điều kiện thường bị bỏ qua: đối tượng phải dịch
-chuyển \textbf{theo phương vuông góc với vạch} một quãng lớn hơn $2\varepsilon$ thì mới
-được đếm. Quãng đường \emph{song song} với vạch, dù dài bao nhiêu, cũng không đóng góp
-gì.
-
-Hệ quả thực tiễn là vạch phải cắt vuông góc với hướng di chuyển chính của đám đông.
-Bảng~\ref{tab:mot17-huong} đo được ảnh hưởng của việc đặt sai hướng: mất khoảng 0{,}3
-điểm F1, lớn hơn mọi tinh chỉnh tham số khác đã thử.
-
-\subsection{Đếm trong vùng đa giác}
-
-Bài toán thứ hai là đếm số đối tượng đang ở trong một khu vực. Vùng là đa giác
-$\mathcal{P}$ do người dùng vẽ; câu hỏi trở thành kiểm tra điểm neo có nằm trong đa
-giác hay không, giải bằng thuật toán \en{ray casting} hoặc hàm \code{pointPolygonTest}
-của OpenCV.
-
-Khác biệt về mặt ngữ nghĩa cần nhấn mạnh: vạch trả lời \emph{``bao nhiêu lượt đi qua''}
---- một đại lượng cộng dồn theo thời gian; vùng trả lời \emph{``hiện có bao nhiêu người
-bên trong''} --- một đại lượng tức thời. Hai câu hỏi khác nhau, không thay thế nhau
-được.
+\textbf{Đếm trong vùng đa giác.} Bài toán thứ hai là đếm số đối tượng đang ở trong một
+khu vực. Vùng là đa giác $\mathcal{P}$ do người dùng vẽ; câu hỏi trở thành kiểm tra
+điểm neo có nằm trong đa giác hay không, giải bằng thuật toán ray casting. Khác
+biệt về ngữ nghĩa cần nhấn mạnh: vạch trả lời ``bao nhiêu lượt đi qua''- một
+đại lượng cộng dồn theo thời gian; vùng trả lời ``hiện có bao nhiêu người bên
+trong''- một đại lượng tức thời. Hai câu hỏi khác nhau, không thay thế nhau được.
 
 \subsection{Mô hình thị giác--ngôn ngữ}
+\label{sub:vlm-lythuyet}
 
-Luồng Thông minh cho phép người dùng mô tả đối tượng cần đếm bằng câu tiếng Việt thay
-vì chọn từ danh sách lớp cố định. Nền tảng là lớp mô hình thị giác--ngôn ngữ
-(\en{vision--language model}): mạng nhận đồng thời một ảnh và một câu mô tả, rồi trả lời
-mức độ khớp giữa hai đầu vào.
 
-Điểm mạnh là không bị giới hạn ở tập lớp đã huấn luyện --- ``người mặc áo trắng'' hay
-``người đeo ba lô'' đều diễn đạt được, trong khi COCO không có lớp nào tương ứng. Điểm
-yếu là chi phí: mỗi lần hỏi tốn hàng trăm mili giây, chậm hơn YOLO khoảng hai bậc độ
-lớn.
+Nền tảng: mô hình thị giác--ngôn ngữ. Đây là lớp mô hình nhận đồng thời một ảnh
+và một câu chữ, rồi trả lời về quan hệ giữa hai đầu vào. Điểm mạnh là không bị giới hạn ở
+tập lớp đã huấn luyện --- ``người mặc áo trắng'' hay ``người đeo ba lô'' đều diễn đạt
+được, trong khi COCO không có lớp nào tương ứng. Điểm yếu là chi phí: mỗi lần hỏi tốn
+hàng trăm mili giây, chậm hơn YOLO khoảng hai bậc độ lớn. Vì vậy hệ thống dùng kiến trúc
+hai tầng: YOLO tìm mọi đối tượng thuộc nhóm lớn (người, xe), rồi mô hình
+thị giác--ngôn ngữ chỉ được hỏi cho những vết \emph{chưa từng được phán quyết}. Kết quả
+lưu theo mã vết nên mỗi người chỉ tốn đúng một lần hỏi trong suốt thời gian họ ở trong
+khung hình.
 
-Vì vậy hệ thống dùng kiến trúc hai tầng: YOLO tìm mọi đối tượng thuộc nhóm lớn (người,
-xe), rồi mô hình thị giác--ngôn ngữ chỉ được hỏi cho những vết \emph{chưa từng được
-phán quyết}. Kết quả lưu theo mã vết nên mỗi người chỉ tốn đúng một lần hỏi trong suốt
-thời gian họ ở trong khung hình.
+\textbf{LocateAnything-3B.} Mô hình cụ thể được chọn ghép một bộ mã hoá thị giác với một
+mô hình ngôn ngữ, cả hai chạy ở độ chính xác \code{bfloat16}:
+
+\begin{table}[H]
+\centering
+\caption{Hai khối của LocateAnything-3B}
+\label{tab:la3b-kientruc}
+\small
+\begin{tabularx}{\textwidth}{@{}llX@{}}
+\toprule
+\textbf{Khối} & \textbf{Kiến trúc} & \textbf{Thông số} \\
+\midrule
+Mã hoá ảnh & MoonViT & 27 lớp, chiều ẩn 1152, ô ảnh $14\times14$ \\
+Sinh văn bản & Qwen2~\cite{qwen2report} & 36 lớp, chiều ẩn 2048, 16 đầu chú ý, từ vựng 152.681 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Chi tiết quyết định nhất: đây là mô hình định vị, không phải mô hình phân
+loại Nó không trả lời ``đúng'' hay ``sai'' mà sinh ra một chuỗi văn bản chứa toạ độ
+vật thể nó tìm thấy:
+
+\begin{lstlisting}[caption={Dạng đầu ra của LA-3B; hệ thống chỉ xét có hộp hợp lệ nào không}]
+<ref>backpack</ref><box><312><88><455><290></box>
+\end{lstlisting}
+
+Hệ thống suy ra ``khung cắt này khớp mô tả'' bằng cách đếm số hộp hợp lệ trong chuỗi trả
+về --- có hộp là khớp, không có là không khớp. Điều này giải thích một kết quả thực
+nghiệm ban đầu trông rất khó hiểu ở Mục~\ref{sec:cachdien}: hỏi \code{person with
+backpack} thì mô hình đi định vị \emph{người}, mà khung cắt nào cũng có người nên gần
+như luôn trả về hộp và gần như không lọc được gì; hỏi thẳng \code{backpack} thì nó đi
+định vị \emph{cái ba lô}, và chỉ trả về hộp khi thật sự có. Cùng một ý nghĩa, hai cách
+diễn đạt, hai hành vi khác hẳn nhau.
+
+\textbf{Opus-MT: dịch tiếng Việt sang tiếng Anh.} LA-3B huấn luyện chủ yếu trên tiếng
+Anh và tiếng Trung nên không hiểu tiếng Việt --- đưa thẳng câu tiếng Việt vào thì mô
+hình giữ lại gần như mọi khung cắt, tức là không lọc gì cả. Hệ thống vì vậy chèn một
+bước dịch, dùng \code{Helsinki-NLP/opus-mt-vi-en}~\cite{tiedemann2020opusmt}: một mô hình MarianMT theo kiến trúc
+Transformer mã hoá--giải mã, 6 lớp mỗi phía, chiều ẩn 512, \textbf{72 triệu tham số}
+--- nhỏ hơn LA-3B khoảng bốn mươi lần, nên chi phí không đáng kể.
+
+Bước dịch không giao hết cho mô hình. Một từ điển chốt cứng được tra trước cho các vật
+thể hay gặp, vì mô hình dịch sai một số từ ngắn --- chẳng hạn ``ô'' thành \en{pane} thay
+vì \en{umbrella}. Bản dịch cũng được nhớ lại nên mỗi câu lệnh chỉ dịch đúng một lần,
+không ảnh hưởng tốc độ xử lý khung hình.
+
+
+\subsection{Truyền hình ảnh và lưu trữ}
+\label{sub:truyenanh}
+
+\textbf{Truyền hình ảnh về trình duyệt.} WebRTC cho độ trễ thấp nhất nhưng đòi hỏi máy
+chủ báo hiệu, xử lý STUN/TURN và mã hoá lại luồng. HLS ổn định qua Internet, đổi lại độ
+trễ vài giây do phải chia đoạn. MJPEG thì chỉ là chuỗi ảnh JPEG nối tiếp trong một phản
+hồi HTTP, hiển thị được bằng thẻ \code{<img>} thông thường.
+
+Hệ thống chạy trong mạng nội bộ với số camera nhỏ, nên MJPEG là lựa chọn hợp lý: độ trễ
+dưới nửa giây, không cần thư viện phía trình duyệt, và quan trọng hơn cả là ảnh gửi đi
+đã được vẽ sẵn hộp giới hạn cùng vạch đếm ở phía máy chủ. Mọi máy trạm nhìn thấy đúng
+một kết quả. Cái giá phải trả là băng thông cao hơn --- chấp nhận được trong mạng LAN
+--- cùng giới hạn sáu kết nối đồng thời trên mỗi tên miền của trình duyệt.
+
+\textbf{Cơ sở dữ liệu.} PostgreSQL mạnh khi nhiều tiến trình cùng ghi và dữ liệu lớn,
+nhưng kéo theo một dịch vụ phải cài đặt và vận hành riêng. SQLite chạy ngay trong tiến
+trình ứng dụng, không cần cấu hình, và ở chế độ WAL cho phép nhiều luồng đọc song song
+với một luồng ghi. Khối lượng ghi của hệ thống chỉ vài sự kiện mỗi phút cho mỗi camera,
+thấp hơn nhiều so với ngưỡng SQLite bắt đầu đuối. Chọn SQLite giúp toàn bộ hệ thống
+triển khai bằng một lệnh duy nhất.
 
 \subsection{Chỉ số đánh giá}
+\label{sub:chiso}
 
 Để nói một hệ thống đếm ``chính xác bao nhiêu'' thì cần định nghĩa rõ thế nào là đúng.
 Mỗi lượt đếm mà hệ thống báo được ghép với lượt qua vạch thật gần nhất trong dữ liệu
@@ -265,78 +325,6 @@ một trong hai quá thấp, nên dùng làm chỉ số tổng hợp.
 Cần phân biệt rõ với \emph{sai số tổng}: một hệ thống đếm thừa 5 lượt và bỏ sót 5 lượt
 sẽ ra đúng tổng số, nhưng mọi lượt đều sai. Vì vậy Mục~\ref{sec:mot17} đối chiếu từng
 lượt một chứ không so tổng.
-
-\section{Khảo sát công nghệ}
-\label{sec:khaosat}
-
-\subsection{Mô hình phát hiện đối tượng}
-
-Ba hướng tiếp cận phổ biến cho bài toán phát hiện đối tượng được cân nhắc, tóm
-tắt trong Bảng~\ref{tab:sosanh-detector}.
-
-\begin{table}[H]
-\centering
-\caption{So sánh các họ mô hình phát hiện đối tượng cho bài toán đếm người theo
-thời gian thực.}
-\label{tab:sosanh-detector}
-\small
-\begin{tabularx}{\textwidth}{@{}lXX@{}}
-\toprule
-\textbf{Mô hình} & \textbf{Ưu điểm} & \textbf{Nhược điểm} \\
-\midrule
-Faster R-CNN & Độ chính xác cao, đặc biệt với vật thể nhỏ &
-Hai giai đoạn nên chậm, khó đạt thời gian thực trên CPU \\
-\addlinespace
-DETR và biến thể & Bỏ được bước NMS, kiến trúc gọn về mặt khái niệm &
-Cần nhiều dữ liệu và thời gian huấn luyện, hệ sinh thái triển khai còn mỏng \\
-\addlinespace
-YOLO (v8) & Một giai đoạn, tốc độ cao, trọng số huấn luyện sẵn trên COCO,
-thư viện Ultralytics hỗ trợ đầy đủ &
-Độ chính xác thấp hơn Faster R-CNN với vật thể rất nhỏ hoặc bị che khuất nhiều \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-YOLOv8 được chọn. Lý do quyết định là bộ trọng số huấn luyện sẵn trên COCO đã
-chứa lớp \code{person} cùng các lớp phương tiện, nên hệ thống chạy được ngay mà
-không cần gán nhãn và huấn luyện lại. Với một kỳ thực tập kéo dài vài tuần, việc
-xây dựng tập dữ liệu riêng sẽ chiếm gần hết quỹ thời gian và không còn chỗ cho
-phần ứng dụng.
-
-\subsection{Thuật toán bám vết}
-
-Phát hiện đơn thuần thì chưa đếm được. Muốn biết một người đã đi qua vạch hay
-chưa, cần theo dõi người đó qua nhiều khung hình liên tiếp.
-
-SORT chạy rất nhanh nhưng đổi mã định danh liên tục mỗi khi đối tượng bị che
-khuất. DeepSORT khắc phục bằng cách so khớp thêm đặc trưng ngoại hình, đổi lại
-phải chạy thêm một mạng trích đặc trưng cho từng hộp, chi phí tăng đáng kể.
-ByteTrack chọn hướng khác: tận dụng cả những hộp có điểm tin cậy thấp mà SORT
-loại bỏ, nhờ đó giữ được vết qua các đoạn che khuất ngắn mà không cần mạng phụ
-nào. Thư viện \en{Supervision} đã đóng gói sẵn ByteTrack cùng các tiện ích vẽ chú
-thích, nên chi phí tích hợp gần như bằng không.
-
-\subsection{Truyền hình ảnh về trình duyệt}
-
-WebRTC cho độ trễ thấp nhất nhưng đòi hỏi máy chủ báo hiệu, xử lý STUN/TURN và
-mã hóa lại luồng. HLS ổn định qua Internet, đổi lại độ trễ vài giây do phải chia
-đoạn. MJPEG thì chỉ là chuỗi ảnh JPEG nối tiếp trong một phản hồi HTTP, hiển thị
-được bằng thẻ \code{<img>} thông thường.
-
-Hệ thống chạy trong mạng nội bộ với số camera nhỏ, nên MJPEG là lựa chọn hợp lý:
-độ trễ dưới nửa giây, không cần thư viện phía trình duyệt, và quan trọng hơn cả
-là ảnh gửi đi đã được vẽ sẵn hộp giới hạn cùng vạch đếm ở phía máy chủ. Mọi máy
-trạm nhìn thấy đúng một kết quả. Cái giá phải trả là băng thông cao hơn, điều
-này chấp nhận được trong mạng LAN.
-
-\subsection{Cơ sở dữ liệu}
-
-PostgreSQL mạnh khi nhiều tiến trình cùng ghi và dữ liệu lớn, nhưng kéo theo một
-dịch vụ phải cài đặt và vận hành riêng. SQLite chạy ngay trong tiến trình ứng
-dụng, không cần cấu hình, và ở chế độ WAL cho phép nhiều luồng đọc song song với
-một luồng ghi. Khối lượng ghi của hệ thống chỉ vài sự kiện mỗi phút cho mỗi
-camera, thấp hơn nhiều so với ngưỡng SQLite bắt đầu đuối. Chọn SQLite giúp toàn
-bộ hệ thống triển khai bằng một lệnh duy nhất.
 
 \section{Công nghệ sử dụng}
 \label{sec:congnghe}

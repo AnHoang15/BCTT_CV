@@ -20,6 +20,11 @@ LUONG=(
   "sanh-nha-ga:people-walking.mp4"
   "cua-sanh-ga:cua-ra-vao-sanh-ga.mp4"
   "cua-hang:cua-hang-tien-loi.mp4"
+  # Hai chuỗi có nhãn chuẩn: phát qua RTSP thì đối chiếu được số hệ thống đếm với số
+  # đúng, tức là kiểm được cả đường RTSP chứ không chỉ kiểm nó có lên hình hay không.
+  # PETS2009 quay 7 fps nên còn là ca thử nguồn nhịp thấp.
+  "nga-tu-pets:pets09-s2l1.mp4"
+  "hanh-lang-caviar:caviar-walkbyshop1.mp4"
 )
 
 if [[ "${1:-}" == "--liet-ke" ]]; then

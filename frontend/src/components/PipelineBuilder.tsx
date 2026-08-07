@@ -14,7 +14,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, Camera as CameraIcon, Check, ChevronDown, ChevronLeft, ChevronRight,
+  AlertTriangle, Camera as CameraIcon, Check, ChevronLeft, ChevronRight,
   Cpu, Pencil, Play, Plus, Sparkles, Square, Trash2, Wand2, X,
 } from 'lucide-react';
 import * as api from '../api';
@@ -112,12 +112,12 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
   const [direction, setDirection] = useState<CountDirection>('both');
   const [maxCount, setMaxCount] = useState('');
   const [autoReset, setAutoReset] = useState<AutoReset>('never');
-  const [speedPreset, setSpeedPreset] = useState('balanced');
   const [targetFps, setTargetFps] = useState(15);
-  // Phải khớp YOLO_CONF trong backend/app/config.py. Giá trị 0,35 đo được trên nhãn
-  // chuẩn MOT17: loại bớt hộp yếu ở xa nên bám vết đỡ nhiễu, mất ít lượt đếm giả hơn.
+  // Phải khớp YOLO_CONF trong backend/app/config.py.
+  // Ghi chú cũ ở đây nói 0,35 tốt hơn 0,25 — kết luận đó ĐÃ BỊ RÚT LẠI: phép đo sinh ra
+  // nó chạy qua đường rút gọn, thiếu bước khử hộp trùng và bước loại hộp quá nhỏ. Chạy
+  // qua đúng đường xử lý thật thì hai giá trị cho kết quả bằng nhau.
   const [conf, setConf] = useState(NGUONG_TIN_CAY_MAC_DINH);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [schedule, setSchedule] = useState<ScheduleSpec>(DEFAULT_SCHEDULE);
 
   const load = useCallback(async () => {
@@ -225,20 +225,9 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
     setDirection('both');
     setMaxCount('');
     setAutoReset('never');
-    setSpeedPreset('balanced');
     setTargetFps(15);
-    setConf(0.25);
-    setShowAdvanced(false);
+    setConf(NGUONG_TIN_CAY_MAC_DINH);
     setSchedule(DEFAULT_SCHEDULE);
-  };
-
-  /** Chọn preset tốc độ là đặt luôn nhịp xử lý và ngưỡng tin cậy đi kèm. */
-  const applyPreset = (id: string) => {
-    const preset = catalog?.speed_presets.find((p) => p.id === id);
-    if (!preset) return;
-    setSpeedPreset(id);
-    setTargetFps(preset.target_fps);
-    setConf(preset.conf);
   };
 
   const exitWizard = () => {
@@ -274,13 +263,6 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
     setTargetFps(pipeline.target_fps ?? 15);
     setConf(pipeline.conf ?? NGUONG_TIN_CAY_MAC_DINH);
     setSchedule(pipeline.schedule ?? DEFAULT_SCHEDULE);
-    // Tô sáng đúng thẻ tốc độ nếu tham số khớp một preset, không thì để trống — thà
-    // không tô còn hơn tô nhầm khiến người dùng tưởng đang dùng preset đó.
-    const preset = catalog?.speed_presets.find(
-      (p) => p.target_fps === pipeline.target_fps && p.conf === pipeline.conf,
-    );
-    setSpeedPreset(preset?.id ?? '');
-    setShowAdvanced(!preset);
     setStep(1);
     setCreating(true);
   };
@@ -765,61 +747,12 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
               <ScheduleEditor value={schedule} onChange={setSchedule} />
 
               <ParamBox title="Tốc độ xử lý">
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {catalog.speed_presets.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => applyPreset(item.id)}
-                      className={`w-full cursor-pointer rounded-lg border p-3.5 text-left
-                                  transition-colors ${
-                        speedPreset === item.id
-                          ? 'border-emerald-500 bg-emerald-50'
-                          : 'border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-semibold text-slate-800">{item.name}</p>
-                        {item.recommended && (
-                          <span className="shrink-0 rounded-full bg-emerald-600 px-1.5
-                                           py-0.5 text-[10px] font-semibold text-white">
-                            Đề xuất
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-0.5 text-xs leading-snug text-slate-500">
-                        {item.description}
-                      </p>
-                      <ul className="mt-1.5 space-y-0.5">
-                        {item.bullets.map((bullet) => (
-                          <li key={bullet} className="text-xs text-slate-400">
-                            · {bullet}
-                          </li>
-                        ))}
-                      </ul>
-                    </button>
-                  ))}
-                </div>
-
-                <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                  <b className="text-slate-800">{targetFps} FPS</b>
-                  <span className="text-slate-300"> · </span>
-                  ngưỡng tin cậy <b className="text-slate-800">{Math.round(conf * 100)}%</b>
-                  <span className="text-slate-300"> · </span>
-                  bám đối tượng: <b className="text-slate-800">bật</b>
+                <p className="text-xs leading-snug text-slate-500">
+                  Nhịp xử lý càng cao thì bám đối tượng càng mượt và đếm càng sát, đổi lại
+                  tốn tài nguyên hơn. Máy yếu hoặc chạy nhiều camera thì hạ xuống.
                 </p>
 
-                <button
-                  onClick={() => setShowAdvanced((v) => !v)}
-                  className="mt-2 flex cursor-pointer items-center gap-1 text-xs
-                             font-bold text-slate-500 hover:text-slate-700"
-                >
-                  {showAdvanced ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                  Tuỳ chỉnh nâng cao
-                  <span className="font-medium text-slate-400">(dành cho kỹ thuật viên)</span>
-                </button>
-
-                {showAdvanced && (
-                  <div className="mt-2 space-y-3 rounded-lg border border-slate-200 p-3">
+                <div className="mt-3 space-y-3">
                     <div>
                       <label className="label" htmlFor="target-fps">Nhịp xử lý</label>
                       <div className="flex items-center gap-2">
@@ -827,16 +760,17 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
                           id="target-fps"
                           type="range" min={1} max={30} step={1}
                           value={targetFps}
-                          onChange={(event) => {
-                            setTargetFps(Number(event.target.value));
-                            setSpeedPreset('custom');
-                          }}
+                          onChange={(event) => setTargetFps(Number(event.target.value))}
                           className="flex-1 accent-emerald-600"
                         />
                         <span className="w-16 shrink-0 text-right text-xs font-bold
                                          tabular-nums text-slate-700">
                           {targetFps} FPS
                         </span>
+                      </div>
+                      <div className="flex justify-between text-xs text-slate-400">
+                        <span>Nhẹ máy, đếm sót nhiều hơn</span>
+                        <span>Chính xác nhất</span>
                       </div>
                     </div>
 
@@ -847,10 +781,7 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
                           id="conf"
                           type="range" min={5} max={90} step={5}
                           value={Math.round(conf * 100)}
-                          onChange={(event) => {
-                            setConf(Number(event.target.value) / 100);
-                            setSpeedPreset('custom');
-                          }}
+                          onChange={(event) => setConf(Number(event.target.value) / 100)}
                           className="flex-1 accent-emerald-600"
                         />
                         <span className="w-16 shrink-0 text-right text-xs font-bold
@@ -872,8 +803,7 @@ export default function PipelineBuilder({ cameras, onChanged }: Props) {
                         ))}
                       </select>
                     </div>
-                  </div>
-                )}
+                </div>
               </ParamBox>
               </div>
 

@@ -49,7 +49,10 @@ class DrawStyle:
     """
 
     def __init__(self, height: int) -> None:
-        s = max(1.0, height / 1080.0)
+        # Cận dưới 0,45 chứ không phải 1,0. Sàn ở 1,0 nghĩa là khung 288 điểm ảnh nhận
+        # cùng cỡ chữ tuyệt đối với khung 1080 — bảng số chiếm gần nửa khung hình và
+        # dòng tiêu đề tràn ra ngoài. Nguồn camera IP độ phân giải thấp gặp đúng cảnh này.
+        s = max(0.45, height / 1080.0)
         self.s = s
         self.box = max(2, round(2 * s))
         self.line = max(3, round(4 * s))

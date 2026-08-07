@@ -73,169 +73,40 @@ tượng ra/vào}, kéo vạch trên ảnh, rồi bấm \emph{Lưu và chạy ng
 \end{tabularx}
 \end{table}
 
-\section{Mã DBML sinh sơ đồ quan hệ}
-\label{app:dbml}
-
-Dán đoạn mã dưới đây vào \url{https://dbdiagram.io} để sinh sơ đồ cho
-Hình~\ref{fig:csdl}.
-
-\begin{lstlisting}[caption={Mã DBML mô tả lược đồ cơ sở dữ liệu}]
-Table cameras {
-  id text [pk]
-  name text
-  location text
-  source text
-  kind text
-  enabled int
-  retention_days int
-  created_at text
-}
-
-Table pipelines {
-  id text [pk]
-  name text
-  camera_id text [ref: > cameras.id]
-  task text
-  classes text
-  line text
-  flip int
-  conf real
-  active int
-  created_at text
-}
-
-Table events {
-  id text [pk]
-  ts text
-  camera_id text [ref: > cameras.id]
-  pipeline_id text [ref: > pipelines.id]
-  type text
-  direction text
-  label text
-  track_id int
-  snapshot text
-  message text
-  status text
-  note text
-  handled_at text
-}
-
-Table counts {
-  id int [pk, increment]
-  ts text
-  camera_id text [ref: > cameras.id]
-  pipeline_id text [ref: > pipelines.id]
-  in_total int
-  out_total int
-  occupancy int
-}
-
-Table segments {
-  id text [pk]
-  camera_id text [ref: > cameras.id]
-  start_ts text
-  end_ts text
-  path text
-  duration real
-}
-\end{lstlisting}
-
-\section{Mã PlantUML sinh sơ đồ kiến trúc}
-\label{app:plantuml}
-
-Dán vào \url{https://www.plantuml.com/plantuml} để sinh ảnh cho
-Hình~\ref{fig:kientruc}.
-
-\begin{lstlisting}[caption={Mã PlantUML mô tả kiến trúc hệ thống}]
-@startuml
-skinparam componentStyle rectangle
-skinparam defaultFontName Arial
-
-package "Trinh duyet" {
-  [Giao dien React] as UI
-}
-
-package "May chu Python (FastAPI)" {
-  [REST API] as API
-  [Camera Manager] as MGR
-  [Camera Worker] as WK
-  [Detector\nYOLOv8 + ByteTrack] as DET
-  [Counter\nCentroidCrossing] as CNT
-  [Segment Recorder] as REC
-  [Search\nphan tich cau tieng Viet] as SRCH
-}
-
-database "SQLite" as DB
-folder "Dia cung" as FS
-
-UI --> API : REST + MJPEG
-API --> MGR
-MGR --> WK : mot luong moi camera
-WK --> DET
-DET --> CNT
-WK --> REC
-API --> SRCH
-SRCH --> DB
-CNT --> DB : su kien + so dem
-REC --> FS : doan MP4
-WK --> FS : anh chup JPEG
-@enduml
-\end{lstlisting}
-
 \chapter{Danh sách điểm cuối API}
 \label{app:api}
 
-\begin{longtable}{@{}p{2cm}p{7.5cm}p{5cm}@{}}
+Máy chủ cung cấp 40 điểm cuối chia theo bảy nhóm. Tài liệu chi tiết --- kiểu dữ liệu
+vào, kiểu trả về, ví dụ phản hồi --- nằm ở tệp \code{docs/api.md} trong mã nguồn, được
+\emph{sinh tự động} từ hệ thống đang chạy bằng \code{scripts/sinh\_tai\_lieu\_api.py}.
+Sinh tự động thay vì viết tay để tài liệu không lệch khỏi mã nguồn --- một lỗi dự án
+này đã mắc ba lần với các tham số khác.
+
+Đặc tả OpenAPI đầy đủ có sẵn tại \code{/openapi.json}, giao diện thử trực tiếp tại
+\code{/docs}.
+
+\begin{table}[H]
+\centering
+\caption{Các nhóm điểm cuối API.}
+\label{tab:nhomapi}
+\small
+\begin{tabularx}{\textwidth}{@{}lcX@{}}
 \toprule
-\textbf{Phương thức} & \textbf{Đường dẫn} & \textbf{Chức năng} \\
+\textbf{Nhóm} & \textbf{Số lượng} & \textbf{Chức năng} \\
 \midrule
-\endfirsthead
-\toprule
-\textbf{Phương thức} & \textbf{Đường dẫn} & \textbf{Chức năng} \\
-\midrule
-\endhead
+\code{/api/cameras}  & 10 & Khai báo nguồn video, luồng MJPEG, ảnh chụp, trạng thái thực \\
+\code{/api/pipelines} &  9 & Cấu hình bài toán AI, chạy và dừng, đặt lại số đếm \\
+\code{/api/events}   &  3 & Sự kiện vượt vạch, xác nhận xử lý, ảnh chụp sự kiện \\
+\code{/api/search}   &  1 & Tìm kiếm bằng câu tiếng Việt \\
+\code{/api/playback} &  6 & Dòng thời gian, đoạn ghi hình, phát và tải về \\
+\code{/api/admin}    &  7 & Cấu hình hệ thống, dung lượng, dọn dữ liệu, nhật ký \\
+\code{/api/ai}       &  2 & Bộ mô tả công cụ và cổng gọi cho trợ lý AI \\
 \bottomrule
-\endfoot
+\end{tabularx}
+\end{table}
 
-GET    & \code{/api/health}                        & Kiểm tra máy chủ và thiết bị tính toán \\
-GET    & \code{/api/summary}                       & Số liệu tổng hợp trong ngày \\
-\midrule
-GET    & \code{/api/cameras}                       & Danh sách camera kèm trạng thái thực \\
-POST   & \code{/api/cameras}                       & Thêm camera \\
-PATCH  & \code{/api/cameras/\{id\}}                & Sửa thông tin camera \\
-DELETE & \code{/api/cameras/\{id\}}                & Xoá camera \\
-POST   & \code{/api/cameras/probe}                 & Thử mở nguồn video \\
-POST   & \code{/api/cameras/\{id\}/toggle}         & Bật hoặc tắt luồng \\
-GET    & \code{/api/cameras/\{id\}/stream}         & Luồng MJPEG \\
-GET    & \code{/api/cameras/\{id\}/snapshot}       & Một khung hình JPEG \\
-GET    & \code{/api/cameras/\{id\}/state}          & Số đếm và hộp phát hiện tức thời \\
-\midrule
-GET    & \code{/api/pipelines}                     & Danh sách pipeline \\
-GET    & \code{/api/pipelines/tasks}               & Danh mục bài toán và lớp đối tượng \\
-POST   & \code{/api/pipelines}                     & Tạo pipeline \\
-PATCH  & \code{/api/pipelines/\{id\}}              & Sửa cấu hình \\
-DELETE & \code{/api/pipelines/\{id\}}              & Xoá pipeline \\
-POST   & \code{/api/pipelines/\{id\}/start}        & Kích hoạt \\
-POST   & \code{/api/pipelines/\{id\}/stop}         & Dừng \\
-POST   & \code{/api/pipelines/\{id\}/reset}        & Đặt lại số đếm về 0 \\
-\midrule
-GET    & \code{/api/events}                        & Danh sách sự kiện có lọc \\
-PATCH  & \code{/api/events/\{id\}}                 & Xác nhận xử lý hoặc đóng \\
-GET    & \code{/api/events/\{id\}/snapshot}        & Ảnh chụp của sự kiện \\
-GET    & \code{/api/search}                        & Tìm kiếm bằng câu tiếng Việt \\
-GET    & \code{/api/counts}                        & Chuỗi số đếm theo giờ \\
-\midrule
-GET    & \code{/api/playback/timeline}             & Đoạn ghi hình và sự kiện của một ngày \\
-GET    & \code{/api/playback/segments}             & Danh sách đoạn ghi hình \\
-GET    & \code{/api/playback/dates}                & Các ngày có dữ liệu \\
-GET    & \code{/api/playback/segments/\{id\}/video} & Phát video, hỗ trợ tua \\
-GET    & \code{/api/playback/at}                   & Tìm đoạn chứa một mốc thời gian \\
-\midrule
-GET    & \code{/api/admin/settings}                & Đọc cấu hình hệ thống \\
-PUT    & \code{/api/admin/settings}                & Cập nhật cấu hình \\
-GET    & \code{/api/admin/storage}                 & Dung lượng đang dùng \\
-POST   & \code{/api/admin/storage/purge}           & Dọn dữ liệu quá hạn \\
-GET    & \code{/api/admin/logs}                    & Nhật ký hoạt động \\
-GET    & \code{/api/admin/system}                  & Thông tin môi trường chạy \\
-
-\end{longtable}
+Nhóm \code{/api/ai} là cổng để trợ lý AI bên ngoài gọi vào hệ thống:
+\code{GET /api/ai/tools} trả về bộ mô tả công cụ dạng máy đọc được, còn
+\code{POST /api/ai/call} thực thi một lời gọi. Bộ công cụ \textbf{chỉ gồm thao tác
+đọc} --- trợ lý không thêm, sửa hay xoá được gì, vì mô hình ngôn ngữ hiểu sai một câu
+hỏi thì chỉ ra câu trả lời sai, còn hiểu sai một lệnh xoá thì mất dữ liệu.

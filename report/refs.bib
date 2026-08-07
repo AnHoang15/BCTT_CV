@@ -1,131 +1,147 @@
 % ─────────────────────────────────────────────────────────────────────────────
 %  Tài liệu tham khảo
-%  Trích dẫn trong bài bằng \cite{khoa}, ví dụ: \cite{yolov8}
+%
+%  Chỉ liệt kê những nguồn hệ thống THỰC SỰ dùng: mô hình đang chạy trong mã
+%  nguồn, thuật toán đang cài đặt, và bộ dữ liệu đang dùng để đo. Không thêm
+%  tài liệu chỉ đọc qua mà không ảnh hưởng tới thiết kế.
 % ─────────────────────────────────────────────────────────────────────────────
 
-@misc{yolov8,
-  author       = {Jocher, Glenn and Chaurasia, Ayush and Qiu, Jing},
-  title        = {Ultralytics {YOLOv8}},
-  year         = {2023},
-  howpublished = {\url{https://github.com/ultralytics/ultralytics}},
-  note         = {Truy cập ngày 29/07/2026}
+% ── Phát hiện đối tượng ──────────────────────────────────────────────────────
+@inproceedings{redmon2016yolo,
+  title     = {You Only Look Once: Unified, Real-Time Object Detection},
+  author    = {Redmon, Joseph and Divvala, Santosh and Girshick, Ross and Farhadi, Ali},
+  booktitle = {IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2016},
 }
 
-@inproceedings{bytetrack,
+@software{jocher2023ultralytics,
+  title   = {Ultralytics YOLOv8},
+  author  = {Jocher, Glenn and Chaurasia, Ayush and Qiu, Jing},
+  year    = {2023},
+  url     = {https://github.com/ultralytics/ultralytics},
+}
+
+@inproceedings{ren2015faster,
+  title     = {Faster {R-CNN}: Towards Real-Time Object Detection with Region
+               Proposal Networks},
+  author    = {Ren, Shaoqing and He, Kaiming and Girshick, Ross and Sun, Jian},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2015},
+}
+
+@inproceedings{carion2020detr,
+  title     = {End-to-End Object Detection with Transformers},
+  author    = {Carion, Nicolas and Massa, Francisco and Synnaeve, Gabriel and
+               Usunier, Nicolas and Kirillov, Alexander and Zagoruyko, Sergey},
+  booktitle = {European Conference on Computer Vision (ECCV)},
+  year      = {2020},
+}
+
+@inproceedings{lin2014coco,
+  title     = {Microsoft {COCO}: Common Objects in Context},
+  author    = {Lin, Tsung-Yi and Maire, Michael and Belongie, Serge and Hays, James
+               and Perona, Pietro and Ramanan, Deva and Doll{\'a}r, Piotr and
+               Zitnick, C. Lawrence},
+  booktitle = {European Conference on Computer Vision (ECCV)},
+  year      = {2014},
+}
+
+% ── Bám vết đa đối tượng ─────────────────────────────────────────────────────
+@article{kalman1960,
+  title   = {A New Approach to Linear Filtering and Prediction Problems},
+  author  = {Kalman, Rudolph Emil},
+  journal = {Journal of Basic Engineering},
+  volume  = {82},
+  number  = {1},
+  year    = {1960},
+}
+
+@article{kuhn1955hungarian,
+  title   = {The {H}ungarian Method for the Assignment Problem},
+  author  = {Kuhn, Harold W.},
+  journal = {Naval Research Logistics Quarterly},
+  volume  = {2},
+  number  = {1--2},
+  year    = {1955},
+}
+
+@inproceedings{bewley2016sort,
+  title     = {Simple Online and Realtime Tracking},
+  author    = {Bewley, Alex and Ge, Zongyuan and Ott, Lionel and Ramos, Fabio and
+               Upcroft, Ben},
+  booktitle = {IEEE International Conference on Image Processing (ICIP)},
+  year      = {2016},
+}
+
+@inproceedings{wojke2017deepsort,
+  title     = {Simple Online and Realtime Tracking with a Deep Association Metric},
+  author    = {Wojke, Nicolai and Bewley, Alex and Paulus, Dietrich},
+  booktitle = {IEEE International Conference on Image Processing (ICIP)},
+  year      = {2017},
+}
+
+@inproceedings{zhang2022bytetrack,
+  title     = {{ByteTrack}: Multi-Object Tracking by Associating Every Detection Box},
   author    = {Zhang, Yifu and Sun, Peize and Jiang, Yi and Yu, Dongdong and
                Weng, Fucheng and Yuan, Zehuan and Luo, Ping and Liu, Wenyu and
                Wang, Xinggang},
-  title     = {{ByteTrack}: Multi-Object Tracking by Associating Every Detection Box},
   booktitle = {European Conference on Computer Vision (ECCV)},
   year      = {2022},
-  pages     = {1--21}
 }
 
-@inproceedings{sort,
-  author    = {Bewley, Alex and Ge, Zongyuan and Ott, Lionel and Ramos, Fabio and
-               Upcroft, Ben},
-  title     = {Simple Online and Realtime Tracking},
-  booktitle = {IEEE International Conference on Image Processing (ICIP)},
-  year      = {2016},
-  pages     = {3464--3468}
+@software{supervision2024,
+  title  = {Supervision: reusable computer vision tools},
+  author = {{Roboflow}},
+  year   = {2024},
+  url    = {https://github.com/roboflow/supervision},
 }
 
-@inproceedings{deepsort,
-  author    = {Wojke, Nicolai and Bewley, Alex and Paulus, Dietrich},
-  title     = {Simple Online and Realtime Tracking with a Deep Association Metric},
-  booktitle = {IEEE International Conference on Image Processing (ICIP)},
-  year      = {2017},
-  pages     = {3645--3649}
-}
-
-@inproceedings{yolo,
-  author    = {Redmon, Joseph and Divvala, Santosh and Girshick, Ross and
-               Farhadi, Ali},
-  title     = {You Only Look Once: Unified, Real-Time Object Detection},
-  booktitle = {IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
-  year      = {2016},
-  pages     = {779--788}
-}
-
-@article{fasterrcnn,
-  author  = {Ren, Shaoqing and He, Kaiming and Girshick, Ross and Sun, Jian},
-  title   = {Faster {R-CNN}: Towards Real-Time Object Detection with Region
-             Proposal Networks},
-  journal = {IEEE Transactions on Pattern Analysis and Machine Intelligence},
-  volume  = {39},
-  number  = {6},
-  pages   = {1137--1149},
-  year    = {2017}
-}
-
-@inproceedings{detr,
-  author    = {Carion, Nicolas and Massa, Francisco and Synnaeve, Gabriel and
-               Usunier, Nicolas and Kirillov, Alexander and Zagoruyko, Sergey},
-  title     = {End-to-End Object Detection with Transformers},
-  booktitle = {European Conference on Computer Vision (ECCV)},
+% ── Mô hình ngôn ngữ và dịch máy ─────────────────────────────────────────────
+@inproceedings{tiedemann2020opusmt,
+  title     = {{OPUS-MT} --- Building Open Translation Services for the World},
+  author    = {Tiedemann, J{\"o}rg and Thottingal, Santhosh},
+  booktitle = {Annual Conference of the European Association for Machine
+               Translation (EAMT)},
   year      = {2020},
-  pages     = {213--229}
 }
 
-@inproceedings{coco,
-  author    = {Lin, Tsung-Yi and Maire, Michael and Belongie, Serge and
-               Hays, James and Perona, Pietro and Ramanan, Deva and
-               Doll{\'a}r, Piotr and Zitnick, C. Lawrence},
-  title     = {Microsoft {COCO}: Common Objects in Context},
-  booktitle = {European Conference on Computer Vision (ECCV)},
-  year      = {2014},
-  pages     = {740--755}
-}
-
-@misc{supervision,
-  author       = {{Roboflow}},
-  title        = {Supervision: Reusable Computer Vision Tools},
+@misc{qwen2report,
+  title        = {Qwen2 Technical Report},
+  author       = {{Qwen Team}},
   year         = {2024},
-  howpublished = {\url{https://github.com/roboflow/supervision}},
-  note         = {Truy cập ngày 29/07/2026}
+  howpublished = {arXiv:2407.10671},
 }
 
-@misc{opencv,
-  author       = {Bradski, Gary},
-  title        = {The {OpenCV} Library},
-  journal      = {Dr. Dobb's Journal of Software Tools},
-  year         = {2000},
-  howpublished = {\url{https://opencv.org}}
+% ── Bộ dữ liệu dùng để đánh giá ──────────────────────────────────────────────
+@misc{milan2016mot16,
+  title        = {{MOT16}: A Benchmark for Multi-Object Tracking},
+  author       = {Milan, Anton and Leal-Taix{\'e}, Laura and Reid, Ian and
+                  Roth, Stefan and Schindler, Konrad},
+  year         = {2016},
+  howpublished = {arXiv:1603.00831},
 }
 
-@misc{fastapi,
-  author       = {Ram{\'i}rez, Sebasti{\'a}n},
-  title        = {{FastAPI}: Modern, Fast Web Framework for Building APIs with Python},
-  year         = {2018},
-  howpublished = {\url{https://fastapi.tiangolo.com}},
-  note         = {Truy cập ngày 29/07/2026}
+@misc{dendorfer2020mot20,
+  title        = {{MOT20}: A Benchmark for Multi Object Tracking in Crowded Scenes},
+  author       = {Dendorfer, Patrick and Rezatofighi, Hamid and Milan, Anton and
+                  Shi, Javen and Cremers, Daniel and Reid, Ian and Roth, Stefan and
+                  Schindler, Konrad and Leal-Taix{\'e}, Laura},
+  year         = {2020},
+  howpublished = {arXiv:2003.09003},
 }
 
-@misc{sqlitewal,
-  author       = {{SQLite Consortium}},
-  title        = {Write-Ahead Logging},
-  howpublished = {\url{https://www.sqlite.org/wal.html}},
-  note         = {Truy cập ngày 29/07/2026}
+@inproceedings{ferryman2009pets,
+  title     = {{PETS2009}: Dataset and Challenge},
+  author    = {Ferryman, James and Shahrokni, Ali},
+  booktitle = {IEEE International Workshop on Performance Evaluation of Tracking
+               and Surveillance (PETS-Winter)},
+  year      = {2009},
 }
 
-@misc{pytorch,
-  author       = {Paszke, Adam and Gross, Sam and Massa, Francisco and others},
-  title        = {{PyTorch}: An Imperative Style, High-Performance Deep Learning Library},
-  booktitle    = {Advances in Neural Information Processing Systems (NeurIPS)},
-  year         = {2019},
-  howpublished = {\url{https://pytorch.org}}
-}
-
-@misc{react,
-  author       = {{Meta Open Source}},
-  title        = {{React}: The Library for Web and Native User Interfaces},
-  howpublished = {\url{https://react.dev}},
-  note         = {Truy cập ngày 29/07/2026}
-}
-
-@misc{rfc7233,
-  author       = {Fielding, Roy T. and Lafon, Yves and Reschke, Julian},
-  title        = {{RFC 7233}: Hypertext Transfer Protocol ({HTTP/1.1}): Range Requests},
-  year         = {2014},
-  howpublished = {\url{https://www.rfc-editor.org/rfc/rfc7233}}
+@misc{caviar2004,
+  title        = {{CAVIAR}: Context Aware Vision using Image-based Active Recognition
+                  --- Test Case Scenarios},
+  author       = {{EC Funded CAVIAR project/IST 2001 37540}},
+  year         = {2004},
+  url          = {https://homepages.inf.ed.ac.uk/rbf/CAVIARDATA1/},
 }

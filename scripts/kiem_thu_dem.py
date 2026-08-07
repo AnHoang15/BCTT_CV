@@ -45,6 +45,65 @@ NGUONG_TIN_CAY = 0.25
 # lâu thêm vài phút.
 SO_KHUNG_TOI_DA = 100_000
 
+# ── Chuỗi có nhãn chuẩn ──────────────────────────────────────────────────────
+# Các bộ dữ liệu công khai không có pipeline trong hệ thống nên `nap_cac_ca()` không
+# thấy chúng. Khai báo ở đây để chúng đi qua ĐÚNG bộ dựng video như mọi ca khác.
+# Trước đây mỗi chuỗi được dựng bằng một script rời trong /tmp, kết quả là hai tệp
+# output cùng thư mục mà khác định dạng: một tệp dải màu JPEG (yuvj420p) một tệp dải
+# màu video (yuv420p), tên tệp thiếu mã pipeline, bảng số vẽ khác kiểu, cỡ chữ khác.
+#
+# Vạch phải cắt VUÔNG GÓC hướng đi chính và chỉ DÀI BẰNG lối đi thật. Vạch kéo hết
+# chiều cao khung hình trông có vẻ "bao trọn" nhưng phần lớn chiều dài của nó nằm trên
+# mái nhà và bãi cỏ — đo được ở PETS2009: vạch dọc kéo hết khung chỉ có 62% chiều dài
+# nằm trên chỗ người thật sự bước, cắt đúng dải đi bộ thì lên 93%. Phần thừa không
+# thay đổi số đếm (bộ đếm đã đòi hình chiếu nằm trong đoạn vạch) nhưng làm người xem
+# hiểu sai là hệ thống đang canh cả vùng đó.
+CA_BO_DU_LIEU = [
+    dict(ten="PETS09-S2L1 — Ngã tư",
+         tep="pets09-s2l1.mp4",
+         nhan="datasets/MOT15/PETS09-S2L1/gt/gt.txt",
+         # Dọc, cắt ngang dải đi bộ y = 0,24--0,56 nơi tập trung toàn bộ lưu lượng.
+         vach=(0.45, 0.24, 0.45, 0.56), lat=False),
+    dict(ten="CAVIAR WalkByShop1 — Hành lang cửa hàng",
+         tep="caviar-walkbyshop1.mp4",
+         nhan="datasets/CAVIAR/WalkByShop1cor/gt.xml",
+         # Chéo, vuông góc với trục hành lang.
+         vach=(1.000, 0.512, 0.268, 1.000), lat=False),
+    dict(ten="CAVIAR WalkByShop1 — vach doc hanh lang (doi chung)",
+         tep="caviar-walkbyshop1.mp4",
+         nhan="datasets/CAVIAR/WalkByShop1cor/gt.xml",
+         # Cùng cảnh, cùng nhãn chuẩn, chỉ khác hướng vạch: vạch này chạy DỌC theo
+         # hành lang thay vì cắt ngang. Giữ lại làm đối chứng cho Mục "Hướng vạch
+         # quyết định độ ổn định" — một chiều luôn cắt vạch ở phía xa camera, nơi
+         # người nhỏ và hay bị bỏ sót, nên sai lệch dồn hết về chiều đó.
+         vach=(0.428, 0.202, 0.782, 0.998), lat=False,
+         hau_to="_vachdoc"),
+]
+
+
+def nap_ca_bo_du_lieu() -> list[dict]:
+    """Dựng danh sách ca từ CA_BO_DU_LIEU, kèm số lượt đúng theo nhãn chuẩn."""
+    sys.path.insert(0, str(GOC / "scripts"))
+    from danh_gia_mot17 import _luot_tu_nhan, _nap_nhan
+
+    cac_ca = []
+    for m in CA_BO_DU_LIEU:
+        video, nhan = GOC / "videos" / m["tep"], GOC / m["nhan"]
+        if not (video.exists() and nhan.exists()):
+            print(f"  bỏ qua {m['ten']}: thiếu {video.name} hoặc nhãn chuẩn")
+            continue
+        cap = cv2.VideoCapture(str(video))
+        W, H = int(cap.get(3)), int(cap.get(4))
+        cap.release()
+        x1, y1, x2, y2 = m["vach"]
+        luot = _luot_tu_nhan(_nap_nhan(nhan),
+                             np.array([x1 * W, y1 * H]), np.array([x2 * W, y2 * H]))
+        vao = sum(1 for e in luot if e[2] == "in")
+        cac_ca.append(dict(m, khoa=Path(m["tep"]).stem + m.get("hau_to", "_nhanchuan"),
+                           chuan=(vao, len(luot) - vao),
+                           ghi_chu=f"nhãn chuẩn {vao} vào / {len(luot) - vao} ra"))
+    return cac_ca
+
 
 def nap_cac_ca() -> list[dict]:
     """Lấy cấu hình vạch trực tiếp từ các pipeline đang chạy trong hệ thống.
@@ -94,15 +153,20 @@ def nap_cac_ca() -> list[dict]:
 def _phat_hien(ca: dict) -> dict:
     """Chạy YOLO + ByteTrack một lần rồi lưu đệm."""
     DEM_TAM.mkdir(exist_ok=True)
-    dem = DEM_TAM / f"{Path(ca['tep']).stem}.pkl"
-    if dem.exists():
-        return pickle.load(dem.open("rb"))
-
     cap = cv2.VideoCapture(str(GOC / "videos" / ca["tep"]))
     W, H = int(cap.get(3)), int(cap.get(4))
     fps = cap.get(cv2.CAP_PROP_FPS) or 25
     tong = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    det = D.Detector(DOI_TUONG, conf=NGUONG_TIN_CAY, fps=30)
+
+    # Nhịp nằm trong tên tệp đệm vì nó đổi hành vi bám vết: ByteTrack quy đổi bộ đệm
+    # giữ vết theo nhịp, nên đệm dựng ở nhịp này không dùng lại cho nhịp khác được.
+    dem = DEM_TAM / f"{Path(ca['tep']).stem}_fps{int(round(fps))}.pkl"
+    if dem.exists():
+        cap.release()
+        return pickle.load(dem.open("rb"))
+
+    # Ghim cứng 30 cho nguồn 7 fps sẽ cho bộ đệm giữ vết 7,1 giây thay vì 1,6 giây.
+    det = D.Detector(DOI_TUONG, conf=NGUONG_TIN_CAY, fps=fps)
     khung = []
     for _ in range(min(tong, SO_KHUNG_TOI_DA)):
         ok, f = cap.read()
@@ -186,16 +250,17 @@ def dung_video(ca: dict, bien: float, canh_dai: int = 1920, crf: int = 20) -> di
     ghi.release()
 
     # OpenCV chỉ ghi được mp4v, mà trình duyệt cần H.264 mới phát trực tiếp được.
-    # `force_original_aspect_ratio=decrease` chỉ thu nhỏ chứ không phóng to, nên video
-    # đã nhỏ hơn ngưỡng được giữ nguyên từng điểm ảnh.
-    subprocess.run(
-        ["ffmpeg", "-y", "-loglevel", "error", "-i", str(tam),
-         "-vf", f"scale=w={canh_dai}:h={canh_dai}:"
-                "force_original_aspect_ratio=decrease:force_divisible_by=2",
-         "-c:v", "libx264", "-preset", "medium", "-crf", str(crf),
-         "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(dich)],
-        check=True,
-    )
+    # `force_original_aspect_ratio=decrease` chỉ điều chỉnh tỉ lệ khung, KHÔNG ngăn
+    # phóng to: nguồn 384x288 vẫn bị kéo lên 1920x1440, biến một video 632 kbps thành
+    # tệp 58 MB mà không thêm chút chi tiết nào. Vì vậy phải tự kiểm tra và bỏ hẳn bước
+    # thu phóng khi nguồn đã nhỏ hơn ngưỡng.
+    lenh = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(tam)]
+    if max(W, H) > canh_dai:
+        lenh += ["-vf", f"scale=w={canh_dai}:h={canh_dai}:"
+                        "force_original_aspect_ratio=decrease:force_divisible_by=2"]
+    lenh += ["-c:v", "libx264", "-preset", "medium", "-crf", str(crf),
+             "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(dich)]
+    subprocess.run(lenh, check=True)
     tam.unlink()
     return dict(tep=dich, vao=lc.in_count, ra=lc.out_count,
                 khung=len(d["khung"]), tong=d["tong"], W=W, H=H, fps=fps)
@@ -219,13 +284,15 @@ def _ve_vach(f, p1, p2, lat, st) -> None:
 
 def _ve_bang(f, ca, lc, st) -> None:
     dong = [ca["ten"], f"VAO: {lc.in_count}   RA: {lc.out_count}"]
+    if ca.get("chuan"):
+        dong.append(f"nhan chuan: {ca['chuan'][0]} vao / {ca['chuan'][1]} ra")
     rong = round(430 * st.s)
     cao = round(14 * st.s) + len(dong) * st.hud_dy
     phu = f.copy()
     cv2.rectangle(phu, (8, 8), (rong, cao), (0, 0, 0), -1)
     cv2.addWeighted(phu, .45, f, .55, 0, f)
     for i, t in enumerate(dong):
-        mau = (120, 255, 120) if i else (240, 240, 240)
+        mau = (200, 200, 200) if i == 2 else ((120, 255, 120) if i else (240, 240, 240))
         cv2.putText(f, t, (round(14 * st.s), round(32 * st.s) + i * st.hud_dy),
                     cv2.FONT_HERSHEY_SIMPLEX, st.hud_font, mau, st.font_th + 1)
 
@@ -238,9 +305,11 @@ def main() -> None:
     ap.add_argument("--bien", type=float, default=config.COUNTER_MARGIN_FRAC,
                     help="margin_frac — bề rộng vùng đệm theo chiều cao đối tượng")
     ap.add_argument("--quet", action="store_true", help="chỉ quét hệ số biên")
+    ap.add_argument("--bo-du-lieu", action="store_true",
+                    help="dựng các chuỗi có nhãn chuẩn thay vì pipeline trong hệ thống")
     args = ap.parse_args()
 
-    cac_ca = nap_cac_ca()
+    cac_ca = nap_ca_bo_du_lieu() if args.bo_du_lieu else nap_cac_ca()
 
     if args.quet:
         moc = (0.20, 0.15, 0.12, 0.10, 0.08, 0.06, 0.04, 0.02)
